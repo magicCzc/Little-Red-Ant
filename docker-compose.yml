@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: little-red-ant
+    restart: always
+    ports:
+      - "3000:3000" # Backend API
+      - "5173:5173" # Frontend (if running in dev mode)
+    volumes:
+      # Persist SQLite DB
+      - ./data:/app/data
+      # Persist Browser Data (Cookies, LocalStorage)
+      - ./browser_data:/app/browser_data
+      # Persist Logs
+      - ./logs:/app/logs
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # Add your AI Keys here
+      - ALIYUN_API_KEY=${ALIYUN_API_KEY}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+    shm_size: '2gb' # Important for Playwright/Chromium stability
