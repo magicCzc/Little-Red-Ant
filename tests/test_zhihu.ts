@@ -1,5 +1,5 @@
 
-import { fetchZhihuHotSearch } from './api/services/crawler/zhihu.js';
+import { fetchZhihuHotSearch } from '../api/services/crawler/zhihu.js';
 
 (async () => {
     try {

@@ -1,10 +1,11 @@
 
 const fs = require('fs');
+const path = require('path');
 
 let capturedNotes = [];
 
 try {
-    const content = fs.readFileSync('e:\\小红蚁\\data\\debug_network_responses.json', 'utf-8');
+    const content = fs.readFileSync(path.join(__dirname, '../data/debug_network_responses.json'), 'utf-8');
     const debugResponses = JSON.parse(content);
 
     debugResponses.forEach((response) => {

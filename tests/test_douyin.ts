@@ -1,5 +1,5 @@
 
-import { fetchDouyinHotSearch } from './api/services/crawler/douyin.js';
+import { fetchDouyinHotSearch } from '../api/services/crawler/douyin.js';
 
 (async () => {
     try {

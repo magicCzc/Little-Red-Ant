@@ -35,6 +35,7 @@ browser_data/
 data/
 !data/.keep
 public/audio/
+temp/
 *.db
 *.sqlite
 *.sqlite-journal

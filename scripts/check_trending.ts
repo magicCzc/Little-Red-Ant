@@ -1,5 +1,5 @@
 
-import db from './api/db.js';
+import db from '../api/db.js';
 
 try {
     const tableInfo = db.prepare("PRAGMA table_info(trending_notes)").all();

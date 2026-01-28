@@ -35,6 +35,8 @@
   },
   "include": [
     "src",
-    "api"
+    "api",
+    "scripts",
+    "tests"
   ]
 }

@@ -1,4 +1,4 @@
-import db from './api/db.js';
+import db from '../api/db.js';
 
 try {
     const columns = db.prepare("PRAGMA table_info(accounts)").all();
