@@ -29,6 +29,8 @@ dist-ssr
 *.sln
 *.sw?
 .vite
+.vercel
+.trae
 
 # Project specific
 browser_data/
