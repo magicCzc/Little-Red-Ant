@@ -2,6 +2,12 @@
 
 > Please follow these guidelines to maintain system stability and scalability.
 
+```
+git clone https://github.com/magicCzc/Little-Red-Ant.git
+cd Little-Red-Ant
+npm install
+```
+
 ## 1. Adding New Background Tasks
 
 The system uses a **Task Registry** pattern. Do NOT add logic directly to `worker.ts`.
