@@ -2,11 +2,10 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import db from '../db.js';
-import { SettingsService } from '../services/SettingsService.js';
+import config from '../config.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
-const DEFAULT_SECRET = 'little-red-ant-secret-key-2026';
 
 // Register (Create Account) - Only for System Initialization
 router.post('/register', async (req, res) => {
@@ -59,8 +58,7 @@ router.post('/login', async (req, res) => {
         }
 
         // Generate Token
-        let secret = await SettingsService.get('JWT_SECRET');
-        if (!secret) secret = DEFAULT_SECRET;
+        const secret = config.security.jwtSecret;
 
         const token = jwt.sign(
             { id: user.id, username: user.username, alias: user.alias, role: user.role }, 
@@ -75,6 +73,7 @@ router.post('/login', async (req, res) => {
         });
 
     } catch (error: any) {
+        console.error('Login error:', error);
         res.status(500).json({ error: error.message });
     }
 });

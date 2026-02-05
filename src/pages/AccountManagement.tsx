@@ -26,6 +26,7 @@ interface Account {
         desc: string;
         tone: string;
         sample: string;
+        image_url?: string; // New field
     };
   }
 
@@ -58,8 +59,10 @@ interface Account {
       niche: '',
       desc: '',
       tone: '',
-      sample: ''
+      sample: '',
+      image_url: '' // New field
   });
+  const personaImageInputRef = useRef<HTMLInputElement>(null);
 
   // Templates State
   const [templates, setTemplates] = useState<any[]>([]);
@@ -260,7 +263,8 @@ interface Account {
         niche: account.persona?.niche || '',
         desc: account.persona?.desc || '',
         tone: account.persona?.tone || '',
-        sample: account.persona?.sample || ''
+        sample: account.persona?.sample || '',
+        image_url: account.persona?.image_url || ''
     });
     setIsPersonaModalOpen(true);
   };
@@ -272,7 +276,8 @@ interface Account {
             niche: personaForm.niche,
             persona_desc: personaForm.desc,
             tone: personaForm.tone,
-            writing_sample: personaForm.sample
+            writing_sample: personaForm.sample,
+            persona_image_url: personaForm.image_url // Save image url
         });
         toast.success('人设配置已保存');
         setIsPersonaModalOpen(false);
@@ -282,6 +287,33 @@ interface Account {
     }
   };
 
+  const handlePersonaImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      try {
+          const toastId = toast.loading('正在上传定妆照...');
+          // Using the same endpoint as before (assuming generic asset upload)
+          const res = await fetch('/api/assets/upload', {
+              method: 'POST',
+              body: formData
+          });
+          
+          if (!res.ok) throw new Error('Upload failed');
+          
+          const data = await res.json();
+          setPersonaForm(prev => ({ ...prev, image_url: data.url }));
+          toast.success('定妆照上传成功', { id: toastId });
+      } catch (error) {
+          toast.error('上传失败');
+      } finally {
+          if (personaImageInputRef.current) personaImageInputRef.current.value = '';
+      }
+  };
+
   const handleApplyTemplate = (templateId: string) => {
       const tmpl = templates.find(t => t.id.toString() === templateId);
       if (tmpl) {
@@ -289,7 +321,8 @@ interface Account {
               niche: tmpl.niche || '',
               desc: `身份标签：${(tmpl.identity_tags || []).join(', ')}`, // Convert tags to desc
               tone: tmpl.style || '',
-              sample: (tmpl.writing_samples || [])[0] || ''
+              sample: (tmpl.writing_samples || [])[0] || '',
+              image_url: '' // Template doesn't have image yet
           });
           toast.success('已应用模板内容');
           setShowTemplateSelect(false);
@@ -613,6 +646,49 @@ interface Account {
                         value={personaForm.tone}
                         onChange={e => setPersonaForm({...personaForm, tone: e.target.value})}
                     />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                        视觉定妆照 (Visual Persona)
+                    </label>
+                    <div className="flex items-start gap-4">
+                        <div className="w-24 h-24 bg-gray-100 rounded-lg border border-gray-300 flex items-center justify-center overflow-hidden relative group">
+                            {personaForm.image_url ? (
+                                <>
+                                    <img src={personaForm.image_url} alt="Persona" className="w-full h-full object-cover" />
+                                    <button 
+                                        onClick={() => setPersonaForm(prev => ({...prev, image_url: ''}))}
+                                        className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        <X size={12} />
+                                    </button>
+                                </>
+                            ) : (
+                                <Users size={32} className="text-gray-300" />
+                            )}
+                        </div>
+                        <div className="flex-1">
+                             <p className="text-xs text-gray-500 mb-2">
+                                上传一张该账号的固定人物形象（定妆照）。AI 生成配图时将优先参考此图，保持人物一致性。
+                             </p>
+                             <div className="flex gap-2">
+                                 <button
+                                    onClick={() => personaImageInputRef.current?.click()}
+                                    className="px-3 py-1.5 border border-gray-300 rounded text-xs font-medium text-gray-700 hover:bg-gray-50 flex items-center"
+                                 >
+                                     <LinkIcon size={12} className="mr-1" /> 上传照片
+                                 </button>
+                                 <input 
+                                    type="file" 
+                                    ref={personaImageInputRef} 
+                                    className="hidden" 
+                                    accept="image/*"
+                                    onChange={handlePersonaImageUpload}
+                                 />
+                                 {/* Future: Add "Generate by AI" button here */}
+                             </div>
+                        </div>
+                    </div>
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">

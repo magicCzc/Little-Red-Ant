@@ -9,6 +9,8 @@ interface CardGeneratorProps {
   tags: string[];
   style?: string; // e.g., 'warm', 'cool', 'business'
   backgroundImage?: string; // Optional background image
+  hideControls?: boolean; // New prop for preview mode
+  scale?: number; // New prop for scaling
 }
 
 export interface CardGeneratorHandle {
@@ -50,7 +52,7 @@ const TEMPLATES = [
   }
 ];
 
-const CardGenerator = forwardRef<CardGeneratorHandle, CardGeneratorProps>(({ title, content, tags, backgroundImage }, ref) => {
+const CardGenerator = forwardRef<CardGeneratorHandle, CardGeneratorProps>(({ title, content, tags, backgroundImage, hideControls, scale = 1 }, ref) => {
   const cardRef = useRef<HTMLDivElement>(null);
   const [currentTemplateIdx, setCurrentTemplateIdx] = useState(0);
   const [generating, setGenerating] = useState(false);
@@ -111,6 +113,7 @@ const CardGenerator = forwardRef<CardGeneratorHandle, CardGeneratorProps>(({ tit
 
   return (
     <div className="space-y-4">
+      {!hideControls && (
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-700 flex items-center">
           <ImageIcon size={16} className="mr-2 text-indigo-500" />
@@ -131,10 +134,11 @@ const CardGenerator = forwardRef<CardGeneratorHandle, CardGeneratorProps>(({ tit
           </button>
         </div>
       </div>
+      )}
 
       {/* Card Preview Area */}
       <div className="relative group">
-        <div className="flex justify-center bg-gray-100 p-4 rounded-lg overflow-hidden border border-gray-200">
+        <div className={`flex justify-center bg-gray-100 p-4 rounded-lg overflow-hidden border border-gray-200 ${hideControls ? 'p-0 border-0 bg-transparent' : ''}`}>
           
           {/* THE CARD */}
           <div
@@ -147,6 +151,8 @@ const CardGenerator = forwardRef<CardGeneratorHandle, CardGeneratorProps>(({ tit
               width: '300px', // Fixed width for mobile aspect ratio (3:4)
               height: '400px',
               padding: '24px',
+              transform: scale !== 1 ? `scale(${scale})` : undefined,
+              transformOrigin: 'top center',
             }}
           >
             {/* Background Image Layer */}
@@ -212,6 +218,8 @@ const CardGenerator = forwardRef<CardGeneratorHandle, CardGeneratorProps>(({ tit
         </div>
 
         {/* Controls Overlay */}
+        {!hideControls && (
+        <>
         <button
           onClick={prevTemplate}
           className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-white/80 rounded-full shadow-sm hover:bg-white text-gray-600"
@@ -226,9 +234,12 @@ const CardGenerator = forwardRef<CardGeneratorHandle, CardGeneratorProps>(({ tit
         >
           <ChevronRight size={20} />
         </button>
+        </>
+        )}
       </div>
 
       {/* Action Bar */}
+      {!hideControls && (
       <div className="flex items-center justify-between">
         <div className="flex items-center text-xs text-gray-500">
           <Palette size={14} className="mr-1" />
@@ -247,6 +258,7 @@ const CardGenerator = forwardRef<CardGeneratorHandle, CardGeneratorProps>(({ tit
           )}
         </button>
       </div>
+      )}
     </div>
   );
 });

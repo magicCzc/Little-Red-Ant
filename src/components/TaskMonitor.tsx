@@ -44,7 +44,12 @@ export default function TaskMonitor() {
 
     const fetchActiveTasks = async () => {
         try {
-            const res = await axios.get('/api/tasks/active');
+            // Using a specific instance to avoid global interceptors for background polling
+            // This prevents auto-logout or error toasts if background polling fails (e.g. 401/409)
+            const res = await axios.get('/api/tasks/active', {
+                skipAuthRefresh: true // Custom config if we had an interceptor logic for it
+            } as any);
+
             if (!isMounted.current) return;
             
             const newActiveTasks: Task[] = res.data;
@@ -86,6 +91,14 @@ export default function TaskMonitor() {
                             if (idx !== -1) {
                                 const newCurrent = [...current];
                                 newCurrent[idx] = { ...newCurrent[idx], status: finalTask.status, updated_at: new Date().toISOString() };
+                                
+                                // Dispatch Global Event for UI Refresh
+                                if (finalTask.status === 'COMPLETED') {
+                                    window.dispatchEvent(new CustomEvent('TASK_COMPLETED', { 
+                                        detail: { id: task.id, type: task.type, status: finalTask.status, payload: task.payload } 
+                                    }));
+                                }
+                                
                                 return newCurrent;
                             }
                             return current;

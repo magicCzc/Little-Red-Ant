@@ -71,8 +71,8 @@ export async function scrapeNoteDetail(noteId: string, accountId?: number, force
         await RPAUtils.humanDelay(page, 1000, 2000);
 
         // --- Security & Status Check ---
-        // Use string evaluation to avoid 'ReferenceError: __name is not defined' caused by esbuild/tsx injection
-        const status = await page.evaluate(`(selectors) => {
+        // Use new Function to avoid 'ReferenceError: __name is not defined' caused by esbuild/tsx injection
+        const status = await page.evaluate(new Function('selectors', `
             // Check Blockers
             const accessLimit = document.querySelector(selectors.Common.AntiBot.AccessLimit);
             const verifySlider = document.querySelector(selectors.Common.AntiBot.Captcha);
@@ -94,7 +94,7 @@ export async function scrapeNoteDetail(noteId: string, accountId?: number, force
             const needsVerify = pageText.includes('安全验证') || (pageText.includes('访问太频繁') && !hasContent);
             
             return { blocked, needsVerify, is404 };
-        }`, Selectors);
+        `) as any, Selectors);
 
         if (status.blocked || status.needsVerify) {
             Logger.warn('RPA:NoteDetail', 'Account blocked or verification required.');
@@ -112,8 +112,8 @@ export async function scrapeNoteDetail(noteId: string, accountId?: number, force
 
         // --- Data Extraction ---
         // We pass Selectors to evaluate to avoid hardcoding
-        // Using string function to avoid compilation artifacts
-        const noteData = await page.evaluate(`(selectors) => {
+        // Using new Function to avoid compilation artifacts and ensure argument passing
+        const noteData = await page.evaluate(new Function('selectors', `
             const state = window.__INITIAL_STATE__;
             
             const parseCount = (str) => {
@@ -191,7 +191,7 @@ export async function scrapeNoteDetail(noteId: string, accountId?: number, force
                 is_video: isVideo,
                 video_url: videoUrl
             };
-        }`, Selectors);
+        `) as any, Selectors);
 
         Logger.info('RPA:NoteDetail', `Scraped note ${noteId}: ${noteData.title}`);
         return noteData;

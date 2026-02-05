@@ -77,8 +77,10 @@ router.get('/', (req, res) => {
     }
 });
 
+import { FileCleanupService } from '../services/core/FileCleanupService.js';
+
 // Delete a note (Create Task)
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
     try {
         const noteId = req.params.id;
         const { accountId } = req.body; // Need account ID to know which cookies to use
@@ -89,12 +91,14 @@ router.delete('/:id', (req, res) => {
             if (!note) {
                 return res.status(404).json({ success: false, error: 'Note not found' });
             }
-            // Use found account_id
-            // But wait, we need to implement the actual DELETE_NOTE task in worker first.
-            // For now, let's just delete from local DB? No, user wants to manage notes on XHS.
-            // Let's stub this as "Local Delete" or "Cloud Delete"
         }
         
+        // 1. Clean up local files (cover_image)
+        const noteRecord = db.prepare('SELECT cover_image FROM note_stats WHERE note_id = ?').get(noteId) as any;
+        if (noteRecord && noteRecord.cover_image) {
+             await FileCleanupService.deleteFiles([noteRecord.cover_image]);
+        }
+
         // Since we don't have DELETE_NOTE RPA yet, we will just delete from local DB for now
         // and tell user "Local record deleted".
         // TODO: Implement RPA Delete

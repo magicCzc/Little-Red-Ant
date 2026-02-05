@@ -3,16 +3,21 @@ import db from '../db.js';
 import { ContentService } from '../services/ai/ContentService.js';
 import { enqueueTask } from '../services/queue.js';
 import { AIFactory } from '../services/ai/AIFactory.js';
+import { validateBody } from '../middleware/validation.js';
+import { 
+    GenerateContentSchema, 
+    GenerateImageSchema, 
+    GenerateVideoSchema, 
+    OptimizePromptSchema 
+} from '../schemas/index.js';
 
 const router = Router();
 
-router.post('/content', async (req, res) => {
+router.post('/content', validateBody(GenerateContentSchema), async (req, res) => {
   const { topic, keywords, style, remix_structure, contentType, accountId } = req.body;
 
-  if (!topic) {
-    return res.status(400).json({ error: 'Topic is required' });
-  }
-
+  // Validation handled by middleware
+  
   try {
     // Enqueue Task
     const taskId = enqueueTask('GENERATE_CONTENT', {
@@ -33,15 +38,13 @@ router.post('/content', async (req, res) => {
 });
 
 // New Endpoint: Generate Image (One by One)
-router.post('/image', async (req, res) => {
-    const { prompt } = req.body;
+router.post('/image', validateBody(GenerateImageSchema), async (req, res) => {
+    const { prompt, ref_img, accountId } = req.body;
     
-    if (!prompt) {
-        return res.status(400).json({ error: 'Prompt is required' });
-    }
+    // Validation handled by middleware
     
     try {
-        const taskId = enqueueTask('GENERATE_IMAGE', { prompt });
+        const taskId = enqueueTask('GENERATE_IMAGE', { prompt, ref_img, accountId });
         res.json({ taskId, status: 'PENDING' });
     } catch (error: any) {
         console.error('Image generation request failed:', error);
@@ -50,15 +53,13 @@ router.post('/image', async (req, res) => {
 });
 
 // New Endpoint: Generate Video
-router.post('/video', async (req, res) => {
-    const { prompt, imageUrl, duration, sceneId, model } = req.body;
+router.post('/video', validateBody(GenerateVideoSchema), async (req, res) => {
+    const { prompt, imageUrl, duration, sceneId, model, accountId } = req.body;
     
-    if (!prompt) {
-        return res.status(400).json({ error: 'Prompt is required' });
-    }
+    // Validation handled by middleware
     
     try {
-        const taskId = enqueueTask('GENERATE_VIDEO', { prompt, imageUrl, duration, sceneId, model });
+        const taskId = enqueueTask('GENERATE_VIDEO', { prompt, imageUrl, duration, sceneId, model, accountId });
         res.json({ taskId, status: 'PENDING' });
     } catch (error: any) {
         console.error('Video generation request failed:', error);
@@ -67,10 +68,10 @@ router.post('/video', async (req, res) => {
 });
 
 // Optimize Prompt
-router.post('/optimize-prompt', async (req, res) => {
+router.post('/optimize-prompt', validateBody(OptimizePromptSchema), async (req, res) => {
     try {
         const { prompt, type } = req.body;
-        if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
+        // Validation handled by middleware
 
         let optimizedPrompt = '';
 

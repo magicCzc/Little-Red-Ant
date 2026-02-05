@@ -41,3 +41,7 @@ temp/
 *.db
 *.sqlite
 *.sqlite-journal
+public/uploads/assets/
+public/outputs/
+
+

@@ -7,6 +7,7 @@ interface Account {
     id: number;
     nickname: string;
     avatar?: string;
+    persona_image_url?: string;
     persona?: {
         desc?: string;
     };

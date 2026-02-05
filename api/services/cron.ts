@@ -12,7 +12,7 @@ import { SettingsService } from './SettingsService.js';
 // 0 9,15,21,3 * * * -> 9am, 3pm, 9pm, 3am
 const DEFAULT_SYNC_SCHEDULE = '0 9,15,21,3 * * *'; 
 const HEALTH_CHECK_SCHEDULE = '0 2 * * *'; // 2:00 AM Daily
-const TRENDS_SCRAPE_SCHEDULE = '0 8 * * *'; // 8:00 AM Daily
+const TRENDS_SCRAPE_SCHEDULE = '0 */3 * * *'; // Every 3 hours
 const COMPETITOR_SYNC_SCHEDULE = '0 10 * * *'; // 10:00 AM Daily
 
 let isJobRunning = false;
@@ -37,12 +37,23 @@ export async function initCronJobs() {
         await checkAllAccountsHealth();
     });
     
-    // 3. Daily Trending Notes Scrape
+    // 3. Trending Notes Scrape (Every 3 hours)
     cron.schedule(TRENDS_SCRAPE_SCHEDULE, async () => {
-        Logger.info('Cron', 'Triggering daily trending notes scrape...');
+        // Safety Check: Night Mode
+        const hour = new Date().getHours();
+        if (hour >= 2 && hour < 6) {
+             Logger.info('Cron', 'Night Mode active (2am-6am). Skipping trends scrape.');
+             return;
+        }
+
+        Logger.info('Cron', 'Triggering scheduled trending notes scrape...');
         try {
             const { enqueueTask } = await import('./queue.js');
-            const categories = ['recommend', 'video', 'fashion', 'beauty', 'food', 'home', 'travel', 'tech', 'career'];
+            const categories = [
+                'recommend', 'video', 'fashion', 'beauty', 'food', 'home', 'travel', 'tech', 'career',
+                'emotion', 'baby', 'movie', 'knowledge', 'game', 'fitness', 'pets', 'photography', 
+                'art', 'music', 'books', 'automobile', 'wedding', 'outdoors', 'acg', 'sports', 'news'
+            ];
             
             // Stagger them slightly to avoid massive spike
             for (const [index, category] of categories.entries()) {
@@ -120,7 +131,20 @@ export function startSyncJob(schedule: string) {
     });
 }
 
+// Night Mode: Check if current time is within sleep window (2am - 6am)
+function isNightMode() {
+    const hour = new Date().getHours();
+    return hour >= 2 && hour < 6;
+}
+
 async function executeSync() {
+    // Safety Check: Night Mode
+    if (isNightMode()) {
+        Logger.info('Cron', 'Night Mode active (2am-6am). Skipping data sync to protect account safety.');
+        isJobRunning = false;
+        return;
+    }
+
     try {
         isJobRunning = true;
         Logger.info('Cron', 'Starting sync execution...');
@@ -128,6 +152,14 @@ async function executeSync() {
         // 1. Sync Note Stats (Views, Likes)
         const statsResult = await scrapeNoteStats();
         Logger.info('Cron', `Stats sync completed. Processed ${statsResult.count} notes.`);
+
+        // 1.1 Trigger AI Feedback Loop (Link & Analyze)
+        try {
+            // Logger.info('Cron', 'Triggering AI Feedback Loop...');
+            // await FeedbackLoopService.runCycle(); // TODO: Implement FeedbackLoopService
+        } catch (fbError: any) {
+            Logger.error('Cron', `Feedback Loop failed: ${fbError.message}`);
+        }
 
         // 2. Sync Comments (Interactions)
         // Add a small delay between tasks

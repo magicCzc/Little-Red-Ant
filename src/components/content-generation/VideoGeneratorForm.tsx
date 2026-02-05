@@ -13,12 +13,13 @@ interface VideoGeneratorFormProps {
     videoLoading: boolean;
     videoError: string | null;
     onGenerateVideo: (e: React.FormEvent) => void;
+    activeAccount?: any; // Add activeAccount
 }
 
 export default function VideoGeneratorForm({
     videoMode, setVideoMode, videoPrompt, setVideoPrompt,
     videoImageUrl, setVideoImageUrl, videoLoading, videoError,
-    onGenerateVideo
+    onGenerateVideo, activeAccount
 }: VideoGeneratorFormProps) {
     return (
         <div className="space-y-6">
@@ -70,6 +71,16 @@ export default function VideoGeneratorForm({
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             视频提示词 <span className="text-red-500">*</span>
                         </label>
+                        {activeAccount && activeAccount.persona_image_url && videoMode === 't2v' && (
+                             <div className="mb-2 bg-blue-50 border border-blue-100 rounded-md p-2 flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-full overflow-hidden border border-blue-200 shrink-0">
+                                    <img src={activeAccount.persona_image_url} className="w-full h-full object-cover" />
+                                </div>
+                                <div className="text-xs text-blue-700">
+                                    <span className="font-bold">人设已激活:</span> 系统将自动使用账号人设作为视频主角 (如提示词包含人物)
+                                </div>
+                             </div>
+                        )}
                         <div className="relative">
                             <textarea
                                 rows={5}

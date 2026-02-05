@@ -1,76 +1,52 @@
 
-import db from '../../../db.js';
+import { enqueueTask } from '../../queue.js';
 import { scrapeTrending } from '../../rpa/trends.js';
 import { fetchWeiboHotSearch } from '../../crawler/weibo.js';
 import { fetchBaiduHotSearch } from '../../crawler/baidu.js';
 import { fetchZhihuHotSearch } from '../../crawler/zhihu.js';
 import { fetchDouyinHotSearch } from '../../crawler/douyin.js';
 import { TaskHandler } from '../TaskHandler.js';
+import { TrendService } from '../../core/TrendService.js';
+import { Logger } from '../../LoggerService.js';
 
 export class ScrapeTrendsHandler implements TaskHandler {
     async handle(task: any): Promise<any> {
         const source = task.payload.source || 'weibo';
         const category = task.payload.category || 'recommend';
         
-        console.log(`[Worker] Scraping trends from ${source} (Category: ${category})...`);
+        Logger.info('Worker', `Scraping trends from ${source} (Category: ${category})...`);
 
         if (source === 'xiaohongshu') {
             const rawTrends = await scrapeTrending(category);
-            this.saveXiaohongshuTrends(rawTrends, category);
-            return { source, count: rawTrends.length, type: 'gallery', category };
+            
+            if (!rawTrends || rawTrends.length === 0) {
+                Logger.warn('Worker', `No trends found for ${category}`);
+                return { source, count: 0, type: 'gallery', category, status: 'EMPTY' };
+            }
+
+            // Use TrendService for persistence
+            await TrendService.saveTrends(rawTrends, category);
+            
+            // Auto-trigger analysis for viral notes
+            const viralCandidates = await TrendService.getViralNotesCandidates(rawTrends);
+            
+            if (viralCandidates.length > 0) {
+                Logger.info('Worker', `Triggering auto-analysis for ${viralCandidates.length} viral notes...`);
+                // Fire and forget loop
+                (async () => {
+                    for (const candidate of viralCandidates) {
+                        Logger.info('Worker', `Auto-analyzing viral note: ${candidate.title} (${candidate.noteId})`);
+                        enqueueTask('ANALYZE_NOTE', { noteId: candidate.noteId });
+                        // Random delay
+                        await new Promise(r => setTimeout(r, 2000 + Math.random() * 3000));
+                    }
+                })().catch(e => Logger.error('Worker', 'Auto-analyze loop failed', e));
+            }
+
+            return { source, count: rawTrends.length, type: 'gallery', category, status: 'SUCCESS' };
         } else {
             return this.handleExternalTrends(source);
         }
-    }
-
-    private saveXiaohongshuTrends(rawTrends: any[], category: string) {
-        const insertNote = db.prepare(`
-            INSERT INTO trending_notes (
-                platform, note_id, title, content, author_name, cover_url, 
-                note_url, likes_count, comments_count, collects_count, scraped_at, category
-            ) VALUES (
-                'xiaohongshu', @note_id, @title, @content, @author, @cover, 
-                @url, @heat, @comments, @collects, CURRENT_TIMESTAMP, @category
-            )
-            ON CONFLICT(note_id) DO UPDATE SET
-            likes_count = @heat,
-            comments_count = @comments,
-            collects_count = @collects,
-            cover_url = excluded.cover_url,
-            note_url = excluded.note_url,
-            title = excluded.title,
-            content = COALESCE(excluded.content, content),
-            author_name = excluded.author_name,
-            scraped_at = CURRENT_TIMESTAMP,
-            category = excluded.category
-        `);
-
-        db.transaction(() => {
-            for (const note of rawTrends) {
-                let noteId = note.url;
-                const noteIdMatch = note.url.match(/\/(explore|discovery\/item)\/([a-zA-Z0-9]+)/);
-                if (noteIdMatch && noteIdMatch[2]) {
-                    noteId = noteIdMatch[2];
-                }
-
-                try {
-                    insertNote.run({
-                        note_id: noteId,
-                        title: note.title,
-                        content: note.summary || '',
-                        author: note.author,
-                        cover: note.cover,
-                        url: note.url,
-                        heat: note.heat,
-                        comments: note.comments || 0,
-                        collects: note.collects || 0,
-                        category: category
-                    });
-                } catch (e) {
-                    console.error('Failed to insert note:', note.title, e);
-                }
-            }
-        })();
     }
 
     private async handleExternalTrends(source: string) {
@@ -87,13 +63,7 @@ export class ScrapeTrendsHandler implements TaskHandler {
             url: t.url
         }));
 
-        db.prepare(`
-            INSERT INTO trends (source, data, updated_at) 
-            VALUES (?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(source) DO UPDATE SET 
-            data = excluded.data,
-            updated_at = CURRENT_TIMESTAMP
-        `).run(source, JSON.stringify(formattedTrends));
+        TrendService.saveExternalTrends(source, formattedTrends);
 
         return { source, count: formattedTrends.length };
     }

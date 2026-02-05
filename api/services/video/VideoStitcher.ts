@@ -60,29 +60,49 @@ export class VideoStitcher {
         const cleanupFiles: string[] = [];
 
         try {
-            // 1. Process each scene (Download & Merge Audio/Video)
+            // 1. Process each scene in PARALLEL
             // We need to normalize them first to ensure consistent framerate/resolution for xfade
-            for (const scene of scenes) {
-                const videoPath = await this.downloader.download(scene.videoUrl);
-                cleanupFiles.push(videoPath);
+            
+            // Map scenes to promises
+            const scenePromises = scenes.map(async (scene) => {
+                const cleanupForScene: string[] = [];
+                try {
+                    const videoPath = await this.downloader.download(scene.videoUrl);
+                    cleanupForScene.push(videoPath);
 
-                let segmentPath = '';
+                    let segmentPath = '';
 
-                if (scene.audioUrl) {
-                    const audioPath = await this.downloader.download(scene.audioUrl);
-                    cleanupFiles.push(audioPath);
+                    if (scene.audioUrl) {
+                        const audioPath = await this.downloader.download(scene.audioUrl);
+                        cleanupForScene.push(audioPath);
+                        
+                        // Merge Video + Audio
+                        segmentPath = path.join(this.tempDir, `merged_${randomUUID()}.mp4`);
+                        await this.mergeAudioVideo(videoPath, audioPath, segmentPath);
+                    } else {
+                        segmentPath = path.join(this.tempDir, `std_${randomUUID()}.mp4`);
+                        await this.standardizeVideo(videoPath, segmentPath);
+                    }
                     
-                    // Merge Video + Audio
-                    segmentPath = path.join(this.tempDir, `merged_${randomUUID()}.mp4`);
-                    await this.mergeAudioVideo(videoPath, audioPath, segmentPath);
-                } else {
-                    segmentPath = path.join(this.tempDir, `std_${randomUUID()}.mp4`);
-                    await this.standardizeVideo(videoPath, segmentPath);
+                    return { segmentPath, cleanupForScene };
+                } catch (e) {
+                    // Clean up partial downloads if this scene fails
+                    cleanupForScene.forEach(f => {
+                         if (fs.existsSync(f)) try { fs.unlinkSync(f); } catch(ignore) {}
+                    });
+                    throw e;
                 }
-                
-                processedFiles.push(segmentPath);
-                cleanupFiles.push(segmentPath);
-            }
+            });
+
+            // Wait for all downloads and processing
+            const results = await Promise.all(scenePromises);
+            
+            // Collect results
+            results.forEach(r => {
+                processedFiles.push(r.segmentPath);
+                cleanupFiles.push(r.segmentPath);
+                cleanupFiles.push(...r.cleanupForScene);
+            });
 
             // 2. Stitch with Transitions (or simple concat if only 1 scene)
             let stitchedVideoPath: string;

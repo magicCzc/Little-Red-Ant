@@ -1,5 +1,5 @@
 import React from 'react';
-import { Film, Send, Loader2, Edit3, Sparkles } from 'lucide-react';
+import { Film, Send, Loader2, Edit3, Sparkles, MessageSquarePlus } from 'lucide-react';
 
 interface VideoScriptGeneratorFormProps {
     topic: string;
@@ -14,12 +14,16 @@ interface VideoScriptGeneratorFormProps {
     onGenerate: (e: React.FormEvent) => void;
     errorMsg: string | null;
     remixStructure: any;
+    // New props
+    customInstructions?: string;
+    setCustomInstructions?: (val: string) => void;
 }
 
 export default function VideoScriptGeneratorForm({
     topic, setTopic, keywords, setKeywords, style, setStyle,
     promptTemplates, activeAccount,
-    loading, onGenerate, errorMsg, remixStructure
+    loading, onGenerate, errorMsg, remixStructure,
+    customInstructions, setCustomInstructions
 }: VideoScriptGeneratorFormProps) {
     return (
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
@@ -80,6 +84,22 @@ export default function VideoScriptGeneratorForm({
                                 <option key={opt.id} value={opt.name}>{opt.name}</option>
                             ))}
                         </select>
+                    </div>
+                )}
+
+                {/* Custom Instructions Input */}
+                {setCustomInstructions && (
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                            <MessageSquarePlus size={14} className="mr-1 text-gray-500" />
+                            补充指令 (可选)
+                        </label>
+                        <textarea
+                            value={customInstructions || ''}
+                            onChange={(e) => setCustomInstructions(e.target.value)}
+                            placeholder="例如：'加强镜头间的衔接'，'第一人称视角'，'结尾要留悬念'..."
+                            className="w-full p-3 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm min-h-[60px]"
+                        />
                     </div>
                 )}
 

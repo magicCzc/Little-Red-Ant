@@ -375,7 +375,9 @@ export async function scrapeComments(targetNoteId?: string) {
         Logger.error('RPA:Comments', `Scrape failed: ${error.message}`, error);
         throw error;
     } finally {
-        if (browser) await browser.close();
+        if (page) {
+            try { await page.close(); } catch(e) {}
+        }
     }
 }
 
@@ -579,6 +581,8 @@ export async function replyToComment(commentId: string, replyContent: string) {
         Logger.error('RPA:Reply', `Reply failed: ${error.message}`, error);
         throw error;
     } finally {
-        if (browser) await browser.close();
+        if (page) {
+            try { await page.close(); } catch(e) {}
+        }
     }
 }

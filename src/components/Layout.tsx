@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Menu, X, LogOut, Home, Users, Sparkles, PenTool, Layout as LayoutIcon, 
-  MessageSquare, Target, FileText, BarChart, PlayCircle, Settings, ShieldCheck, Bell, ChevronLeft, ChevronRight, Flame, Database, Library
+  MessageSquare, Target, FileText, BarChart, PlayCircle, Settings, ShieldCheck, Bell, ChevronLeft, ChevronRight, Flame, Database, Library, TrendingUp
 } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import axios from 'axios';

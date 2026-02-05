@@ -34,6 +34,7 @@ router.get('/', async (req, res) => {
         const search = req.query.search as string; // Optional search filter
         const date = req.query.date as string; // Optional date filter (YYYY-MM-DD)
         const analyzed = req.query.analyzed === 'true'; // Filter by analyzed status
+        const type = req.query.type as string; // Optional type filter: 'all' | 'video' | 'image'
 
         let orderBy = 'scraped_at DESC';
         if (sort === 'likes_count') orderBy = 'likes_count DESC';
@@ -46,6 +47,14 @@ router.get('/', async (req, res) => {
         if (category && category !== 'all') {
             whereConditions.push('category = ?');
             params.push(category);
+        }
+
+        if (type && type !== 'all') {
+            if (type === 'video') {
+                whereConditions.push("(type = 'video' OR type = 'video_note')");
+            } else if (type === 'image') {
+                whereConditions.push("(type = 'image' OR type = 'normal' OR type IS NULL OR type = '')");
+            }
         }
 
         if (analyzed) {

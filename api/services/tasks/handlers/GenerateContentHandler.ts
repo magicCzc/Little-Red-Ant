@@ -48,7 +48,8 @@ export class GenerateContentHandler implements TaskHandler {
                 topic: task.payload.topic,
                 keywords: task.payload.keywords,
                 remix_structure: task.payload.remix_structure,
-                contentType: task.payload.contentType
+                contentType: task.payload.contentType,
+                custom_instructions: task.payload.custom_instructions
             });
         }
     }

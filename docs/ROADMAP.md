@@ -74,6 +74,20 @@
 - [x] **Docker 化**：提供 Dockerfile 和 docker-compose.yml，解决 Playwright 依赖环境不一致的问题。
 - [x] **CI/CD**：配置 GitHub Actions 进行自动构建和类型检查。
 
+## 📍 Phase 4: 全能力 CLI 与无头模式 (Completed)
+> 目标：将所有核心能力暴露为命令行接口，支持脚本化与 Agent 调用。
+
+- [x] **CLI 基础架构**：
+    - [x] 实现 `do` (确定性命令) 与 `say` (自然语言指令) 双模式。
+    - [x] 实现 `dry-run` 机制，支持预览任务 Payload 而不触发副作用。
+- [x] **功能矩阵补全**：
+    - [x] **内容闭环**：`publish-cycle` (生成-合规-草稿-发布)。
+    - [x] **数据查询**：`competitor-list`, `comments-list`, `tasks-list`。
+    - [x] **配置管理**：`settings-*`, `selectors-*`。
+- [x] **Agent 友好**：
+    - [x] 提供完整的 `SKILL.md` 描述，支持 AI Agent 自主调用。
+    - [x] 统一 JSON 输出格式，便于工具解析。
+
 ---
 
-> 更新时间: 2026-01-24
+> 更新时间: 2026-02-05

@@ -3,14 +3,16 @@ import db from '../../../db.js';
 import { ContentService } from '../../ai/ContentService.js';
 import { scrapeNoteDetail } from '../../rpa/xiaohongshu.js';
 import { TaskHandler } from '../TaskHandler.js';
+import { TrendService } from '../../core/TrendService.js';
+import { Logger } from '../../LoggerService.js';
 
 export class AnalyzeNoteHandler implements TaskHandler {
     async handle(task: any): Promise<any> {
         const noteId = task.payload.noteId;
-        console.log(`[Worker] Analyzing note ${noteId}...`);
+        Logger.info('Worker', `Analyzing note ${noteId}...`);
 
-        // 1. Get current note data
-        let note = db.prepare('SELECT * FROM trending_notes WHERE note_id = ?').get(noteId) as any;
+        // 1. Get current note data via Service
+        let note = TrendService.getNoteById(noteId);
         
         // 2. If content missing, deep scrape
         if (!note || !note.content) {
@@ -37,23 +39,21 @@ export class AnalyzeNoteHandler implements TaskHandler {
             contentToAnalyze, 
             note.title || '', 
             note.type || 'image',
-            (note as any).videoFrames || [] 
+            (note as any).videoFrames || [],
+            undefined, // audioPath
+            note.images ? (typeof note.images === 'string' ? JSON.parse(note.images) : note.images) : []
         );
         
-        // 4. Save Analysis
-        db.prepare(`
-            UPDATE trending_notes 
-            SET analysis_result = ?
-            WHERE note_id = ?
-        `).run(JSON.stringify(analysis), noteId);
+        // 4. Save Analysis via Service
+        TrendService.saveAnalysisResult(noteId, analysis);
 
         return { noteId, analysis };
     }
 
     private async deepScrape(noteId: string, currentNote: any) {
-        console.log(`[Worker] Content missing for ${noteId}, starting deep scrape...`);
+        Logger.info('Worker', `Content missing for ${noteId}, starting deep scrape...`);
         try {
-            const noteInfo = db.prepare('SELECT note_url FROM trending_notes WHERE note_id = ?').get(noteId) as any;
+            const noteInfo = TrendService.getNoteById(noteId);
             const targetIdOrUrl = (noteInfo && noteInfo.note_url && noteInfo.note_url.includes('xsec_token')) ? noteInfo.note_url : noteId;
             
             const activeAccount = db.prepare('SELECT id FROM accounts WHERE is_active = 1').get() as { id: number };
@@ -67,36 +67,14 @@ export class AnalyzeNoteHandler implements TaskHandler {
                 videoFrames = await this.processVideo(details);
             }
 
-            // Update DB
-            db.prepare(`
-                UPDATE trending_notes 
-                SET content = ?, tags = ?, created_at = ?,
-                    likes_count = COALESCE(?, likes_count),
-                    comments_count = COALESCE(?, comments_count),
-                    collects_count = COALESCE(?, collects_count),
-                    type = ?,
-                    transcript = ?,
-                    video_meta = ?
-                WHERE note_id = ?
-            `).run(
-                details.content, 
-                JSON.stringify(details.tags), 
-                details.date || new Date().toISOString(),
-                details.likes_count,
-                details.comments_count,
-                details.collects_count,
-                details.is_video ? 'video' : 'image',
-                details.transcript || null,
-                details.video_meta ? JSON.stringify(details.video_meta) : null,
-                noteId
-            );
+            // Update DB via Service
+            const updatedNote = TrendService.updateNoteDetails(noteId, details, videoFrames);
             
-            const updatedNote = { ...currentNote, ...details, type: details.is_video ? 'video' : 'image' };
-            (updatedNote as any).videoFrames = videoFrames;
-            return updatedNote;
+            // Merge with currentNote to preserve other fields if needed, but Service returns fresh details
+            return { ...currentNote, ...updatedNote };
 
         } catch (scrapeError: any) {
-            console.error(`[Worker] Failed to scrape note ${noteId}:`, scrapeError);
+            Logger.error('Worker', `Failed to scrape note ${noteId}:`, scrapeError);
             if (scrapeError.message && (scrapeError.message.includes('ACCOUNT_BLOCKED') || scrapeError.message.includes('IP_BLOCKED') || scrapeError.message.includes('NOTE_UNAVAILABLE'))) {
                 throw scrapeError;
             }
@@ -105,7 +83,7 @@ export class AnalyzeNoteHandler implements TaskHandler {
     }
 
     private async processVideo(details: any) {
-        console.log(`[Worker] Video note detected (${details.likes_count} likes), starting deep video processing...`);
+        Logger.info('Worker', `Video note detected (${details.likes_count} likes), starting deep video processing...`);
         try {
             if (details.video_url) {
                 const { VideoProcessor } = await import('../../video/VideoProcessor.js');
@@ -121,7 +99,7 @@ export class AnalyzeNoteHandler implements TaskHandler {
                 }
             }
         } catch (vpError) {
-            console.error('[Worker] Video processing failed:', vpError);
+            Logger.error('Worker', 'Video processing failed:', vpError);
         }
         return [];
     }

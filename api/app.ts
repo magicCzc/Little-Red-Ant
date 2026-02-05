@@ -31,7 +31,10 @@ import trendingNotesRoutes from './routes/trending_notes.js'
 import videoProjectRoutes from './routes/video_projects.js'
 import assetRoutes from './routes/assets.js'
 import noteRoutes from './routes/notes.js'
-import { initDB } from './db.js'
+import complianceRoutes from './routes/compliance.js'
+import optimizationRoutes from './routes/optimizations.js'
+import configRoutes from './routes/config.js'
+import db, { initDB } from './db.js'
 import { authenticateToken } from './middleware/auth.js'
 
 // for esm mode
@@ -43,6 +46,16 @@ dotenv.config()
 
 // init db
 initDB()
+
+// Reset zombie tasks (PROCESSING -> PENDING) on startup
+try {
+  const result = db.prepare("UPDATE tasks SET status = 'PENDING' WHERE status = 'PROCESSING'").run();
+  if (result.changes > 0) {
+    console.log(`[Startup] Recovered ${result.changes} zombie tasks (PROCESSING -> PENDING)`);
+  }
+} catch (error) {
+  console.error('[Startup] Failed to recover zombie tasks:', error);
+}
 
 const app: express.Application = express()
 
@@ -80,6 +93,9 @@ app.use('/api/prompts', authenticateToken, promptRoutes)
 app.use('/api/notifications', authenticateToken, notificationRoutes)
 app.use('/api/trending-notes', authenticateToken, trendingNotesRoutes)
 app.use('/api/notes', authenticateToken, noteRoutes)
+app.use('/api/compliance', authenticateToken, complianceRoutes)
+app.use('/api/optimizations', authenticateToken, optimizationRoutes)
+app.use('/api/config', authenticateToken, configRoutes)
 
 // Temporarily expose these for debugging/stability (or maybe user token is missing in frontend request?)
 // Actually, let's keep auth but ensure the routes are mounted correctly.

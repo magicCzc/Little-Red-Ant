@@ -45,6 +45,41 @@ export default function CompetitorDetail() {
     const [chartMetric, setChartMetric] = useState<'fans' | 'likes'>('fans');
     const navigate = useNavigate();
 
+    // Analysis State
+    const [analyzingId, setAnalyzingId] = useState<string | null>(null);
+    const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+    const [currentAnalysis, setCurrentAnalysis] = useState<any>(null);
+    const [currentNote, setCurrentNote] = useState<any>(null);
+
+    const handleAnalyzeNote = async (note: any) => {
+        if (note.analysis_result) {
+            setCurrentNote(note);
+            setCurrentAnalysis(note.analysis_result);
+            setShowAnalysisModal(true);
+            return;
+        }
+
+        setAnalyzingId(note.note_id);
+        try {
+            const toastId = toast.loading('正在进行深度分析...');
+            const res = await axios.post(`/api/trending-notes/${note.note_id}/analyze`);
+            const { taskId, status, result } = res.data;
+
+            if (status === 'COMPLETED') {
+                setCurrentNote(note);
+                setCurrentAnalysis(result);
+                setShowAnalysisModal(true);
+                toast.success('分析完成！', { id: toastId });
+            } else {
+                 toast.success('分析任务已提交，请稍后刷新查看', { id: toastId });
+            }
+        } catch (e) {
+            toast.error('分析请求失败');
+        } finally {
+            setAnalyzingId(null);
+        }
+    };
+
     useEffect(() => {
         if (id) fetchDetail();
     }, [id]);

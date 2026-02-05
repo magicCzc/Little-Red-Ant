@@ -104,10 +104,12 @@ export default function Drafts() {
               title: draft.title,
               content: draft.content,
               tags: draft.tags,
-              autoPublish: true, // Auto click publish
+              autoPublish: true, // Force Auto Publish
               imageData: draft.images || [], // Use stored images
               scheduledAt,
-              contentType: draft.content_type || 'note' // Pass content type
+              contentType: draft.content_type || 'note', // Pass content type
+              // Note: Drafts page might not have activeAccount context easily unless we fetch it or store it in draft meta
+              // For now, let backend handle default active account if not provided
           });
           
           if (scheduledAt) {
@@ -118,7 +120,36 @@ export default function Drafts() {
           }
       } catch (error: any) {
           console.error('Publish failed:', error);
-          toast.error(`发布失败: ${error.response?.data?.error || error.message}`);
+          const errorData = error.response?.data;
+          
+          if (errorData?.code === 'SESSION_EXPIRED') {
+              toast((t) => (
+                  <div className="flex flex-col">
+                      <span className="font-medium mb-2">账号登录已失效</span>
+                      <span className="text-sm text-gray-500 mb-3">请前往账号矩阵重新登录小红书账号。</span>
+                      <div className="flex gap-2">
+                          <button 
+                              onClick={() => {
+                                  toast.dismiss(t.id);
+                                  navigate('/accounts');
+                              }}
+                              className="px-3 py-1 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700"
+                          >
+                              去登录账号
+                          </button>
+                          <button 
+                              onClick={() => toast.dismiss(t.id)}
+                              className="px-3 py-1 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300"
+                          >
+                              关闭
+                          </button>
+                      </div>
+                  </div>
+              ), { duration: 8000, icon: '🔒' });
+              return;
+          }
+
+          toast.error(`发布失败: ${errorData?.error || error.message}`);
       }
   };
 
