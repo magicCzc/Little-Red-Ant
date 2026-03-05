@@ -9,10 +9,14 @@ const screenshotsDir = path.join(logsDir, 'screenshots');
 
 // Ensure directories exist
 if (!fs.existsSync(logsDir)) {
-    try { fs.mkdirSync(logsDir, { recursive: true }); } catch (e) {}
+    try { fs.mkdirSync(logsDir, { recursive: true }); } catch {
+        // Ignore directory creation errors
+    }
 }
 if (!fs.existsSync(screenshotsDir)) {
-    try { fs.mkdirSync(screenshotsDir, { recursive: true }); } catch (e) {}
+    try { fs.mkdirSync(screenshotsDir, { recursive: true }); } catch {
+        // Ignore directory creation errors
+    }
 }
 
 // Configure Winston with Daily Rotate

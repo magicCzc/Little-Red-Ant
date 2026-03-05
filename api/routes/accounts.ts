@@ -179,14 +179,17 @@ router.delete('/:id', (req, res) => {
         // 3. Delete note_stats
         db.prepare('DELETE FROM note_stats WHERE account_id = ?').run(accountId);
 
-        // 3.1 Delete related tasks (Cleanup zombie tasks)
+        // 4. Delete comments related to this account
+        db.prepare('DELETE FROM comments WHERE account_id = ?').run(accountId);
+
+        // 5. Delete related tasks (Cleanup zombie tasks)
         // Match "accountId": 123 or "accountId": "123" in payload
         db.prepare(`
             DELETE FROM tasks 
             WHERE payload LIKE ? OR payload LIKE ?
-        `).run(`%"accountId":${accountId}%`, `%"accountId":"${accountId}"%`);
+        `).run(`%"accountId":${accountId}%`, ` "%accountId":"${accountId}"%`);
 
-        // 4. Delete account
+        // 6. Delete account
         db.prepare('DELETE FROM accounts WHERE id = ?').run(accountId);
     })();
 

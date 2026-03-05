@@ -9,13 +9,16 @@ import { DATA_DIR } from './utils.js';
 import { Logger } from '../LoggerService.js';
 import { Selectors } from './config/selectors.js';
 import { RPAUtils } from './utils/RPAUtils.js';
+import { config } from '../../config.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const SCREENSHOT_DIR = path.join(__dirname, '../../../../public/screenshots');
+const SCREENSHOT_DIR = path.join(config.paths.public, 'screenshots');
 
 if (!fs.existsSync(SCREENSHOT_DIR)) {
-    fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
+    try {
+        fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
+    } catch (e) {
+        console.error('[Publish] Failed to create screenshot directory:', e);
+    }
 }
 
 async function takeProgressScreenshot(page: Page, taskId: string) {

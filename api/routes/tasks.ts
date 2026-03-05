@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getTask, enqueueTask, cancelTask } from '../services/queue.js';
 import db from '../db.js';
+import { wrapError } from '../utils/ErrorMessages.js';
 
 const router = Router();
 
@@ -107,11 +108,28 @@ router.get('/:id', (req, res) => {
     try {
         const task = getTask(req.params.id);
         if (!task) {
-            return res.status(404).json({ error: 'Task not found' });
+            return res.status(404).json({ 
+                error: 'Task not found',
+                friendlyError: wrapError('TASK_NOT_FOUND')
+            });
         }
-        res.json(task);
+        
+        // 如果任务失败，添加友好错误信息
+        if (task.status === 'FAILED' && task.error) {
+            const wrapped = wrapError(task.error);
+            res.json({
+                ...task,
+                friendlyError: wrapped
+            });
+        } else {
+            res.json(task);
+        }
     } catch (error: any) {
-        res.status(500).json({ error: error.message });
+        const wrapped = wrapError(error);
+        res.status(500).json({ 
+            error: error.message,
+            friendlyError: wrapped
+        });
     }
 });
 

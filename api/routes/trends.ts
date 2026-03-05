@@ -20,8 +20,8 @@ router.get('/', async (req, res) => {
     const now = Date.now();
     
     // 1. Get from DB
-    const row = db.prepare('SELECT * FROM trends WHERE source = ?').get(source) as any;
-    let data = row ? JSON.parse(row.data) : [];
+    const row = db.prepare('SELECT * FROM trends WHERE source = ?').get(source) as { data: string; updated_at: string } | undefined;
+    const data = row ? JSON.parse(row.data) : [];
     const lastUpdate = row ? new Date(row.updated_at).getTime() : 0;
     
     // Convert UTC/Server time to timestamp if needed, but Date(row.updated_at) should work if format is standard

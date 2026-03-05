@@ -147,20 +147,22 @@ export default function Layout({ children }: LayoutProps) {
       )}
 
       {/* Mobile Header */}
-      <div className="md:hidden bg-white border-b border-gray-200 p-4 flex justify-between items-center sticky top-0 z-20">
-        <div className="flex items-center font-bold text-gray-900">
-           <span className="bg-red-600 text-white p-1 rounded mr-2 text-xs">Ant</span>
+      <div className="md:hidden bg-gradient-to-r from-indigo-600 to-purple-600 p-4 flex justify-between items-center sticky top-0 z-20 shadow-lg">
+        <div className="flex items-center font-bold text-white">
+           <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center mr-2 text-lg">
+              🐜
+           </div>
            小红蚁
         </div>
         <div className="flex items-center gap-3">
-            <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full relative">
+            <button className="p-2 text-white/80 hover:bg-white/20 rounded-full relative transition-colors">
                 <Bell size={20} />
                 {unreadCount > 0 && (
-                  <span className="absolute top-1.5 right-2 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-400 rounded-full border-2 border-indigo-600"></span>
                 )}
             </button>
-            <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-gray-600">
-              {isMobileMenuOpen ? <X /> : <Menu />}
+            <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-white p-1">
+              {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
         </div>
       </div>
@@ -183,34 +185,34 @@ export default function Layout({ children }: LayoutProps) {
           </button>
 
           {/* Logo Area */}
-          <div className="p-6 border-b border-gray-100 hidden md:flex items-center justify-between h-20">
+          <div className="p-6 border-b border-gray-100 hidden md:flex items-center justify-between h-20 bg-gradient-to-r from-indigo-50 to-purple-50">
              <div className="flex items-center justify-center w-full">
-                <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center text-white font-bold flex-shrink-0">
+                <div className="w-10 h-10 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center text-white font-bold flex-shrink-0 shadow-lg text-lg">
                   🐜
                 </div>
-                {!isSidebarCollapsed && <span className="text-xl font-bold text-gray-900 ml-3 whitespace-nowrap overflow-hidden">小红蚁</span>}
+                {!isSidebarCollapsed && <span className="text-xl font-bold bg-gradient-to-r from-indigo-700 to-purple-700 bg-clip-text text-transparent ml-3 whitespace-nowrap overflow-hidden">小红蚁</span>}
              </div>
           </div>
 
           {/* User Profile Summary */}
-          <div className={`bg-gray-50 border-b border-gray-100 flex items-center ${isSidebarCollapsed ? 'justify-center p-2' : 'justify-between p-4'}`}>
+          <div className={`bg-gradient-to-r from-indigo-50/50 to-purple-50/50 border-b border-gray-100 flex items-center ${isSidebarCollapsed ? 'justify-center p-2' : 'justify-between p-4'}`}>
              <div className="flex items-center min-w-0">
-                <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold flex-shrink-0">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-white flex items-center justify-center font-bold flex-shrink-0 shadow-sm">
                     {user?.username?.charAt(0).toUpperCase() || 'A'}
                 </div>
                 {!isSidebarCollapsed && (
                     <div className="min-w-0 ml-3">
                         <p className="text-sm font-medium text-gray-900 truncate max-w-[100px]">{user?.username || 'Admin'}</p>
-                        <p className="text-xs text-gray-500 truncate capitalize">{user?.role || 'Administrator'}</p>
+                        <p className="text-xs text-gray-500 truncate capitalize">{user?.role === 'admin' ? '管理员' : '编辑'}</p>
                     </div>
                 )}
              </div>
              {/* Notification Bell (Desktop) */}
              {!isSidebarCollapsed && (
-                <Link to="/notifications" className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-full relative transition-colors">
+                <Link to="/notifications" className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full relative transition-colors">
                     <Bell size={18} />
                     {unreadCount > 0 && (
-                      <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full ring-1 ring-white"></span>
+                      <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
                     )}
                 </Link>
              )}
@@ -233,14 +235,14 @@ export default function Layout({ children }: LayoutProps) {
                             onClick={() => setIsMobileMenuOpen(false)}
                             title={isSidebarCollapsed ? item.title : ''}
                             className={`
-                              flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors
+                              flex items-center px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-200
                               ${isActive(item.path) 
-                                ? 'bg-red-50 text-red-700' 
-                                : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'}
+                                ? 'bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-700 shadow-sm' 
+                                : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'}
                               ${isSidebarCollapsed ? 'justify-center' : ''}
                             `}
                           >
-                            <item.icon className={`h-5 w-5 flex-shrink-0 ${isActive(item.path) ? 'text-red-500' : 'text-gray-400'} ${!isSidebarCollapsed ? 'mr-3' : ''}`} />
+                            <item.icon className={`h-5 w-5 flex-shrink-0 ${isActive(item.path) ? 'text-indigo-600' : 'text-gray-400'} ${!isSidebarCollapsed ? 'mr-3' : ''}`} />
                             {!isSidebarCollapsed && item.title}
                           </Link>
                         ))}
@@ -250,10 +252,10 @@ export default function Layout({ children }: LayoutProps) {
           </nav>
 
           {/* Footer Actions */}
-          <div className="p-4 border-t border-gray-200">
+          <div className="p-4 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
             <button 
               onClick={handleLogoutClick}
-              className={`flex items-center w-full px-4 py-2 text-sm font-medium text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors ${isSidebarCollapsed ? 'justify-center' : ''}`}
+              className={`flex items-center w-full px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200 ${isSidebarCollapsed ? 'justify-center' : ''}`}
               title={isSidebarCollapsed ? '退出登录' : ''}
             >
               <LogOut className={`h-5 w-5 flex-shrink-0 ${!isSidebarCollapsed ? 'mr-3' : ''}`} />

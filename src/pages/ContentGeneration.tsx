@@ -723,10 +723,9 @@ export default function ContentGeneration() {
         </div>
 
         {activeTab === 'note' || activeTab === 'video_script' ? (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Left Column: Context & Reference */}
-            <div className="lg:col-span-1 space-y-6">
-                
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left Column: Hot Trends - Narrower */}
+            <div className="lg:col-span-3 space-y-4">
                 {/* 1. Note Mode: Trends */}
                 {activeTab === 'note' && (
                     <TrendSidebar onSelectTopic={setTopic} />
@@ -743,50 +742,61 @@ export default function ContentGeneration() {
                         setShowStructureModal={setShowStructureModal}
                     />
                 )}
-
-                {/* 3. Forms */}
-                {activeTab === 'note' ? (
-                    <NoteGeneratorForm 
-                        topic={topic}
-                        setTopic={setTopic}
-                        keywords={keywords}
-                        setKeywords={setKeywords}
-                        style={style}
-                        setStyle={setStyle}
-                        contentType={contentType}
-                        setContentType={setContentType}
-                        promptTemplates={promptTemplates}
-                        activeAccount={activeAccount}
-                        loading={loading}
-                        onGenerate={handleGenerate}
-                        errorMsg={errorMsg}
-                        remixStructure={remixStructure}
-                        remixSourceTitle={remixSourceTitle}
-                        customInstructions={customInstructions}
-                        setCustomInstructions={setCustomInstructions}
-                    />
-                ) : (
-                    <VideoScriptGeneratorForm
-                        topic={topic}
-                        setTopic={setTopic}
-                        keywords={keywords}
-                        setKeywords={setKeywords}
-                        style={style}
-                        setStyle={setStyle}
-                        promptTemplates={promptTemplates}
-                        activeAccount={activeAccount}
-                        loading={loading}
-                        onGenerate={handleGenerate}
-                        errorMsg={errorMsg}
-                        remixStructure={remixStructure}
-                        customInstructions={customInstructions}
-                        setCustomInstructions={setCustomInstructions}
-                    />
-                )}
             </div>
 
-            {/* Right Column: Result */}
-            <div className="lg:col-span-2 space-y-6">
+            {/* Right Column: Main Content Area - Wider */}
+            <div className="lg:col-span-9 space-y-4">
+                {/* Configuration Form - Always visible */}
+                <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-indigo-50/50 to-purple-50/50">
+                        <h3 className="font-semibold text-gray-800 flex items-center">
+                            <Edit3 size={18} className="mr-2 text-indigo-600" />
+                            创作配置
+                        </h3>
+                    </div>
+                    <div className="p-6">
+                        {activeTab === 'note' ? (
+                            <NoteGeneratorForm 
+                                topic={topic}
+                                setTopic={setTopic}
+                                keywords={keywords}
+                                setKeywords={setKeywords}
+                                style={style}
+                                setStyle={setStyle}
+                                contentType={contentType}
+                                setContentType={setContentType}
+                                promptTemplates={promptTemplates}
+                                activeAccount={activeAccount}
+                                loading={loading}
+                                onGenerate={handleGenerate}
+                                errorMsg={errorMsg}
+                                remixStructure={remixStructure}
+                                remixSourceTitle={remixSourceTitle}
+                                customInstructions={customInstructions}
+                                setCustomInstructions={setCustomInstructions}
+                            />
+                        ) : (
+                            <VideoScriptGeneratorForm
+                                topic={topic}
+                                setTopic={setTopic}
+                                keywords={keywords}
+                                setKeywords={setKeywords}
+                                style={style}
+                                setStyle={setStyle}
+                                promptTemplates={promptTemplates}
+                                activeAccount={activeAccount}
+                                loading={loading}
+                                onGenerate={handleGenerate}
+                                errorMsg={errorMsg}
+                                remixStructure={remixStructure}
+                                customInstructions={customInstructions}
+                                setCustomInstructions={setCustomInstructions}
+                            />
+                        )}
+                    </div>
+                </div>
+
+                {/* Result Section */}
                 {result ? (
                 <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
                     {currentSession?.status === 'PENDING' ? (
@@ -1170,34 +1180,62 @@ export default function ContentGeneration() {
                 <div className="h-full min-h-[400px] flex flex-col items-center justify-center text-gray-400 p-8 border-2 border-dashed border-gray-200 rounded-lg bg-gray-50/50">
                     <Sparkles size={48} className="mb-4 text-gray-300" />
                     <p className="text-center text-gray-500">
-                    {loading ? 'AI 正在分析人设并生成文案...\n这通常需要 10-20 秒' : '选择左侧热点或输入选题\n生成的爆款笔记将显示在这里'}
+                    {loading 
+                        ? 'AI 正在分析人设并生成文案...\n这通常需要 10-20 秒' 
+                        : activeTab === 'note' 
+                            ? '选择左侧热点或输入选题\n生成的爆款笔记将显示在这里'
+                            : '参考左侧黄金法则\n输入主题生成视频脚本'}
                     </p>
                 </div>
                 )}
             </div>
             </div>
         ) : (
-            // Video Mode Layout
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-               {/* Left: Inputs */}
-               <div className="lg:col-span-1 space-y-6">
-                  <VideoGeneratorForm 
-                      videoMode={videoMode}
-                      setVideoMode={setVideoMode}
-                      videoPrompt={videoPrompt}
-                      setVideoPrompt={setVideoPrompt}
-                      videoImageUrl={videoImageUrl}
-                      setVideoImageUrl={setVideoImageUrl}
-                      videoLoading={videoLoading}
-                      videoError={videoError}
-                      onGenerateVideo={handleGenerateVideo}
-                      activeAccount={activeAccount}
-                  />
+            // Video Mode Layout - Unified with note/script tabs
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+               {/* Left: Tips Sidebar */}
+               <div className="lg:col-span-3 space-y-4">
+                  <div className="bg-gradient-to-br from-pink-50 to-purple-50 p-4 rounded-lg border border-pink-100">
+                    <h3 className="text-sm font-bold text-pink-800 flex items-center mb-3">
+                      <Film size={16} className="mr-2" />
+                      视频生成技巧
+                    </h3>
+                    <div className="space-y-2 text-xs text-pink-700">
+                      <p><strong>文生视频：</strong>详细描述场景、动作、光影效果</p>
+                      <p><strong>图生视频：</strong>上传参考图，描述如何让图片动起来</p>
+                      <p><strong>提示词优化：</strong>使用 AI 优化按钮转换为英文，效果更好</p>
+                    </div>
+                  </div>
                </div>
             
-               {/* Right: Result */}
-               <div className="lg:col-span-2 space-y-6">
-                   {currentVideoSession ? (
+               {/* Right: Main Content */}
+               <div className="lg:col-span-9 space-y-4">
+                  {/* Configuration Form */}
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-pink-50/50 to-purple-50/50">
+                      <h3 className="font-semibold text-gray-800 flex items-center">
+                        <Film size={18} className="mr-2 text-pink-600" />
+                        视频创作配置
+                      </h3>
+                    </div>
+                    <div className="p-6">
+                      <VideoGeneratorForm 
+                          videoMode={videoMode}
+                          setVideoMode={setVideoMode}
+                          videoPrompt={videoPrompt}
+                          setVideoPrompt={setVideoPrompt}
+                          videoImageUrl={videoImageUrl}
+                          setVideoImageUrl={setVideoImageUrl}
+                          videoLoading={videoLoading}
+                          videoError={videoError}
+                          onGenerateVideo={handleGenerateVideo}
+                          activeAccount={activeAccount}
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Result Section - Full width card */}
+                  {currentVideoSession ? (
                        <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
                           <div className="p-6 space-y-6">
                               {/* History Header */}

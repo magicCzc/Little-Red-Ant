@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import axios from 'axios';
-import { Trash2, Edit, FileText, ArrowLeft, Loader2, AlertCircle, Send, Calendar, Clock } from 'lucide-react';
+import { Trash2, Edit, FileText, ArrowLeft, Loader2, AlertCircle, Send, Calendar, Clock, Search, Filter, X, FileText as FileTextIcon, BookOpen } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import Modal from '../components/Modal';
 import toast from 'react-hot-toast';
@@ -15,7 +15,7 @@ interface Draft {
   tags: string[];
   images?: string[];
   created_at: string;
-  content_type?: string; // Add content_type to interface
+  content_type?: 'note' | 'article' | string;
 }
 
 export default function Drafts() {
@@ -26,6 +26,12 @@ export default function Drafts() {
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [currentDraft, setCurrentDraft] = useState<Draft | null>(null);
   const [scheduledTime, setScheduledTime] = useState('');
+  
+  // Filter States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'note' | 'article'>('all');
+  const [showFilters, setShowFilters] = useState(false);
+  
   const navigate = useNavigate();
   const isMounted = useRef(true);
 
@@ -166,6 +172,40 @@ export default function Drafts() {
       setIsScheduleModalOpen(true);
   };
 
+  // Filter drafts
+  const filteredDrafts = useMemo(() => {
+    return drafts.filter(draft => {
+      // Type filter
+      if (typeFilter !== 'all' && draft.content_type !== typeFilter) {
+        return false;
+      }
+      // Search filter
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const matchTitle = draft.title.toLowerCase().includes(query);
+        const matchContent = draft.content.toLowerCase().includes(query);
+        const matchTags = draft.tags.some(tag => tag.toLowerCase().includes(query));
+        return matchTitle || matchContent || matchTags;
+      }
+      return true;
+    });
+  }, [drafts, typeFilter, searchQuery]);
+
+  // Clear all filters
+  const clearFilters = () => {
+    setSearchQuery('');
+    setTypeFilter('all');
+  };
+
+  // Get content type label
+  const getContentTypeLabel = (type?: string) => {
+    switch (type) {
+      case 'article': return { text: '深度长文', color: 'bg-purple-100 text-purple-700 border-purple-200', icon: BookOpen };
+      case 'note': return { text: '图文笔记', color: 'bg-blue-100 text-blue-700 border-blue-200', icon: FileTextIcon };
+      default: return { text: '图文笔记', color: 'bg-blue-100 text-blue-700 border-blue-200', icon: FileTextIcon };
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8 pb-20">
       <div className="max-w-3xl mx-auto">
@@ -175,73 +215,172 @@ export default function Drafts() {
           icon={FileText}
         />
 
+        {/* Filter Bar */}
+        {!loading && drafts.length > 0 && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 mb-6">
+            <div className="flex flex-col sm:flex-row gap-4">
+              {/* Search */}
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="搜索标题、内容或标签..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+              
+              {/* Type Filter */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setTypeFilter('all')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    typeFilter === 'all' 
+                      ? 'bg-indigo-600 text-white' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  全部
+                </button>
+                <button
+                  onClick={() => setTypeFilter('note')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                    typeFilter === 'note' 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <FileTextIcon size={14} />
+                  图文笔记
+                </button>
+                <button
+                  onClick={() => setTypeFilter('article')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                    typeFilter === 'article' 
+                      ? 'bg-purple-600 text-white' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <BookOpen size={14} />
+                  深度长文
+                </button>
+              </div>
+            </div>
+            
+            {/* Filter Stats */}
+            {(searchQuery || typeFilter !== 'all') && (
+              <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+                <span className="text-sm text-gray-500">
+                  共找到 <span className="font-medium text-gray-900">{filteredDrafts.length}</span> 个草稿
+                </span>
+                <button
+                  onClick={clearFilters}
+                  className="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                >
+                  <X size={14} />
+                  清除筛选
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {loading ? (
           <PageLoading message="正在加载草稿列表..." />
-        ) : drafts.length === 0 ? (
+        ) : filteredDrafts.length === 0 ? (
           <EmptyState 
-            title="暂无草稿" 
-            description="去创作第一篇笔记" 
+            title={searchQuery || typeFilter !== 'all' ? "未找到匹配的草稿" : "暂无草稿"}
+            description={searchQuery || typeFilter !== 'all' ? "尝试调整筛选条件" : "去创作第一篇笔记"}
             icon={FileText}
             action={
-              <Link to="/generate" className="text-indigo-600 hover:text-indigo-800 mt-2 inline-block">
-                去创作第一篇笔记 &rarr;
-              </Link>
+              searchQuery || typeFilter !== 'all' ? (
+                <button 
+                  onClick={clearFilters}
+                  className="text-indigo-600 hover:text-indigo-800 mt-2 inline-block"
+                >
+                  清除筛选条件 &rarr;
+                </button>
+              ) : (
+                <Link to="/generate" className="text-indigo-600 hover:text-indigo-800 mt-2 inline-block">
+                  去创作第一篇笔记 &rarr;
+                </Link>
+              )
             }
           />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {drafts.map(draft => (
-              <div key={draft.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow flex flex-col h-full">
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex-1 mr-2">
-                      <h3 className="font-bold text-lg text-gray-900 line-clamp-1">{draft.title}</h3>
-                  </div>
-                  <span className="text-xs text-gray-400 whitespace-nowrap bg-gray-50 px-2 py-1 rounded">
+            {filteredDrafts.map(draft => (
+              <div key={draft.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all flex flex-col h-[320px]">
+                {/* Header: Type Badge + Date */}
+                <div className="flex justify-between items-center mb-3">
+                  {(() => {
+                    const typeInfo = getContentTypeLabel(draft.content_type);
+                    const Icon = typeInfo.icon;
+                    return (
+                      <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${typeInfo.color}`}>
+                        <Icon size={12} />
+                        {typeInfo.text}
+                      </span>
+                    );
+                  })()}
+                  <span className="text-xs text-gray-400">
                     {new Date(draft.created_at).toLocaleDateString()}
                   </span>
                 </div>
                 
-                {/* Content Type Badge & Preview */}
-                <div className="mb-4">
+                {/* Title */}
+                <h3 className="font-bold text-lg text-gray-900 line-clamp-1 mb-3">{draft.title}</h3>
+                
+                {/* Content Preview - Fixed Height */}
+                <div className="flex-1 min-h-0 mb-4">
                     {draft.content_type === 'article' ? (
-                        <div className="bg-purple-50 p-3 rounded-lg border border-purple-100 mb-2">
-                             <div className="flex items-center gap-2 mb-2">
-                                <span className="text-xs font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full border border-purple-200">
-                                    深度长文
-                                </span>
-                             </div>
-                             <p className="text-gray-600 text-sm line-clamp-4 leading-relaxed font-serif">
+                        <div className="bg-purple-50/50 p-3 rounded-lg border border-purple-100 h-full">
+                             <p className="text-gray-600 text-sm line-clamp-5 leading-relaxed">
                                 {draft.content}
                              </p>
                         </div>
                     ) : (
-                        <>
+                        <div className="h-full flex flex-col">
                             {draft.images && draft.images.length > 0 && (
-                                <div className="flex gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide">
+                                <div className="flex gap-2 mb-3 overflow-x-auto pb-1 scrollbar-hide">
                                     {draft.images.slice(0, 3).map((img, i) => (
-                                        <div key={i} className="flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
+                                        <div key={i} className="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
                                             <img src={img} alt={`Preview ${i}`} className="w-full h-full object-cover" />
                                         </div>
                                     ))}
                                     {draft.images.length > 3 && (
-                                        <div className="flex-shrink-0 w-20 h-20 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center text-gray-400 text-xs">
+                                        <div className="flex-shrink-0 w-16 h-16 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center text-gray-400 text-xs">
                                             +{draft.images.length - 3}
                                         </div>
                                     )}
                                 </div>
                             )}
-                            <p className="text-gray-600 text-sm line-clamp-3 mb-4 flex-1">{draft.content}</p>
-                        </>
+                            <p className="text-gray-600 text-sm line-clamp-3 flex-1">{draft.content}</p>
+                        </div>
                     )}
                 </div>
                 
-                <div className="flex flex-wrap gap-1.5 mb-4">
-                  {draft.tags.slice(0, 3).map((tag, i) => (
-                    <span key={i} className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full border border-indigo-100">#{tag}</span>
+                {/* Tags - Fixed Height */}
+                <div className="flex flex-wrap gap-1.5 mb-4 h-6 overflow-hidden">
+                  {draft.tags.slice(0, 4).map((tag, i) => (
+                    <span key={i} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">#{tag}</span>
                   ))}
+                  {draft.tags.length > 4 && (
+                    <span className="text-xs text-gray-400">+{draft.tags.length - 4}</span>
+                  )}
                 </div>
                 
-                <div className="flex items-center justify-between border-t border-gray-50 pt-4 mt-auto">
+                {/* Actions */}
+                <div className="flex items-center justify-between border-t border-gray-100 pt-4 mt-auto">
                   <button 
                     onClick={() => confirmDelete(draft.id)}
                     className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"

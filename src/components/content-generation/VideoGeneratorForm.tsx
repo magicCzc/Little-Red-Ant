@@ -1,5 +1,5 @@
 import React from 'react';
-import { Film, Loader2, Sparkles } from 'lucide-react';
+import { Film, Loader2, Sparkles, Type, Image } from 'lucide-react';
 import toast from 'react-hot-toast';
 import axios from 'axios';
 
@@ -22,25 +22,26 @@ export default function VideoGeneratorForm({
     onGenerateVideo, activeAccount
 }: VideoGeneratorFormProps) {
     return (
-        <div className="space-y-6">
+        <div className="space-y-5">
             {/* Mode Switcher */}
-            <div className="bg-white p-1 rounded-lg border border-gray-200 flex">
+            <div className="bg-gray-100 p-1 rounded-xl flex w-fit shadow-inner">
                 <button 
                     onClick={() => setVideoMode('t2v')}
-                    className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${videoMode === 't2v' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}
+                    className={`px-5 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 flex items-center gap-2 ${videoMode === 't2v' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                 >
+                    <Type size={16} />
                     文生视频
                 </button>
                 <button 
                     onClick={() => setVideoMode('i2v')}
-                    className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${videoMode === 'i2v' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}
+                    className={`px-5 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 flex items-center gap-2 ${videoMode === 'i2v' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                 >
+                    <Image size={16} />
                     图生视频
                 </button>
             </div>
     
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-                <form onSubmit={onGenerateVideo} className="space-y-4">
+            <form onSubmit={onGenerateVideo} className="space-y-4">
                     {videoMode === 'i2v' && (
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -138,7 +139,6 @@ export default function VideoGeneratorForm({
                         * 建议使用 "AI 帮我优化" 将提示词转换为英文，生成效果更好
                     </p>
                 </form>
-            </div>
         </div>
     );
 }
