@@ -39,7 +39,7 @@ router.get('/', (req, res) => {
       images: JSON.parse(d.images || '[]'),
       meta_data: d.meta_data ? JSON.parse(d.meta_data) : null
     })));
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({ error: 'Failed to fetch drafts' });
   }
 });
@@ -91,7 +91,9 @@ router.delete('/:id', async (req, res) => {
             const parsed = JSON.parse(draft.images || '[]');
             // Handle both string[] and object[] format
             images = parsed.map((img: any) => typeof img === 'string' ? img : img.url);
-        } catch (e) {}
+        } catch {
+            // Ignore parsing errors
+        }
 
         // 2. Delete files
         if (images.length > 0) {

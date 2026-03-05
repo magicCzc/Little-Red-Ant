@@ -296,7 +296,7 @@ ${remix_structure.structure_breakdown?.map((s: string) => `   - ${s}`).join('\n'
 
         // Support for Custom Templates from DB based on Style
         // Logic: Try to get a specific template for the style, if not found, use default 'note_gen_standard'
-        let tplName = 'note_gen_standard';
+        const tplName = 'note_gen_standard';
         let tpl = this.getTemplate(tplName, defaultTemplate, '标准笔记生成');
 
         // Note: The original code supported loading "style" specific templates.
@@ -304,11 +304,13 @@ ${remix_structure.structure_breakdown?.map((s: string) => `   - ${s}`).join('\n'
         // or check if 'style' exists in prompt_templates
         if (style && style !== '亲切自然') {
              try {
-                 const customRow = db.prepare('SELECT template FROM prompt_templates WHERE name = ?').get(style) as any;
+                 const customRow = db.prepare('SELECT template FROM prompt_templates WHERE name = ?').get(style) as { template: string } | undefined;
                  if (customRow) {
                      tpl = customRow.template;
                  }
-             } catch (ignore) {}
+             } catch {
+                 // Ignore DB errors, use default template
+             }
         }
 
         let systemPrompt = this.processTemplate(tpl, {
