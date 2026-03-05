@@ -26,13 +26,7 @@ export default function VideoScriptGeneratorForm({
     customInstructions, setCustomInstructions
 }: VideoScriptGeneratorFormProps) {
     return (
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-            <div className="mb-4 pb-2 border-b border-gray-100 flex items-center text-indigo-600">
-                <Film size={18} className="mr-2" />
-                <h3 className="text-sm font-bold">脚本参数配置</h3>
-            </div>
-            
-            <form onSubmit={onGenerate} className="space-y-4">
+        <form onSubmit={onGenerate} className="space-y-5">
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                         新脚本主题 <span className="text-red-500">*</span>
@@ -145,6 +139,5 @@ export default function VideoScriptGeneratorForm({
                     )}
                 </button>
             </form>
-        </div>
     );
 }

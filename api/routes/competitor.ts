@@ -3,6 +3,7 @@ import { Router } from 'express';
 import db from '../db.js';
 import { enqueueTask } from '../services/queue.js';
 import { DataSanitizer } from '../utils/DataSanitizer.js';
+import { wrapError } from '../utils/ErrorMessages.js';
 
 const router = Router();
 
@@ -26,15 +27,26 @@ router.get('/', (req, res) => {
                 analysis = DataSanitizer.safeJsonParse(analysis, {});
             }
 
+            // 为失败的竞品添加友好错误信息
+            let friendlyError = null;
+            if (item.status === 'error' && item.last_error) {
+                friendlyError = wrapError(item.last_error);
+            }
+
             return {
                 ...item,
-                latest_notes: DataSanitizer.safeJsonParse(item.latest_notes, []), // Keep for backward compatibility for now
-                analysis_result: analysis
+                latest_notes: DataSanitizer.safeJsonParse(item.latest_notes, []),
+                analysis_result: analysis,
+                friendlyError
             };
         });
         res.json({ success: true, data: parsedList });
     } catch (error: any) {
-        res.status(500).json({ error: error.message });
+        const wrapped = wrapError(error);
+        res.status(500).json({ 
+            error: error.message,
+            friendlyError: wrapped
+        });
     }
 });
 

@@ -8,22 +8,41 @@ export class ApiInterceptStrategy implements ScrapingStrategy {
     async execute(page: Page, userId: string): Promise<ScrapeResult | null> {
         let apiData: any = null;
 
-        // Setup Request Interception
-        await page.route('**/api/sns/web/v1/user_posted**', async (route) => {
-            const response = await route.fetch();
-            try {
-                const json = await response.json();
-                if (json.success && json.data && json.data.notes) {
-                    apiData = json.data;
-                }
-            } catch(e) {}
-            route.fulfill({ response });
-        });
-
-        const targetUrl = `https://www.xiaohongshu.com/user/profile/${userId}`;
-        Logger.info('RPA:Strategy:API', `Navigating to ${targetUrl} (Intercept Mode)...`);
+        // Setup Request Interception - Updated to match current XHS API patterns
+        const apiPatterns = [
+            '**/api/sns/web/v1/user_posted**',
+            '**/api/sns/web/v1/user/profile**',
+            '**/api/sns/web/v2/user/note**',
+            '**/api/sns/web/v1/user/note**'
+        ];
         
-        await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 30000 });
+        for (const pattern of apiPatterns) {
+            await page.route(pattern, async (route) => {
+                const response = await route.fetch();
+                try {
+                    const json = await response.json();
+                    Logger.info('RPA:Strategy:API', `Intercepted ${pattern}: success=${json.success}, hasNotes=${!!json.data?.notes}, hasData=${!!json.data}`);
+                    if (json.success && json.data) {
+                        // Handle different API response structures
+                        if (json.data.notes) {
+                            apiData = json.data;
+                        } else if (json.data.user_info && json.data.notes_list) {
+                            // Alternative API structure
+                            apiData = {
+                                notes: json.data.notes_list,
+                                user: json.data.user_info
+                            };
+                        }
+                    }
+                } catch(e) {
+                    Logger.warn('RPA:Strategy:API', `Failed to parse API response from ${pattern}: ${e}`);
+                }
+                route.fulfill({ response });
+            });
+        }
+
+        // Note: Page navigation is now done in CompetitorScraper before calling this strategy
+        Logger.info('RPA:Strategy:API', `Executing API intercept strategy...`);
         
         // Wait for API data (scroll to trigger if needed)
         if (!apiData) {
@@ -31,7 +50,10 @@ export class ApiInterceptStrategy implements ScrapingStrategy {
             await page.waitForTimeout(2000);
         }
 
-        if (!apiData) return null;
+        if (!apiData) {
+            Logger.warn('RPA:Strategy:API', 'No API data intercepted, API strategy failed');
+            return null;
+        }
 
         // Extract Profile Info from DOM (API usually only has notes)
         const domInfo = await page.evaluate(function() {

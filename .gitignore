@@ -44,4 +44,17 @@ temp/
 public/uploads/assets/
 public/outputs/
 
+# Debug & Development
+debug/
+public/screenshots/
+
+# Documents
+*.docx
+*.doc
+*.pdf
+
+# OS
+Thumbs.db
+desktop.ini
+
 

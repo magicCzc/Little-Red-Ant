@@ -81,28 +81,28 @@ export default function ScriptReferenceSidebar({
     }
 
     return (
-        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-5 rounded-lg shadow-sm border border-indigo-100">
+        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-4 rounded-lg border border-indigo-100">
             <h3 className="text-sm font-bold text-indigo-800 flex items-center mb-3">
                 <Film size={16} className="mr-2" />
                 短视频黄金法则
             </h3>
-            <div className="space-y-3">
+            <div className="space-y-2.5">
                 <div className="flex items-start">
-                    <span className="bg-indigo-100 text-indigo-600 text-xs font-bold px-1.5 py-0.5 rounded mr-2 mt-0.5">3s</span>
+                    <span className="bg-indigo-100 text-indigo-600 text-xs font-bold px-1.5 py-0.5 rounded mr-2 mt-0.5 shrink-0">3s</span>
                     <p className="text-xs text-indigo-700 leading-relaxed">
-                        <strong>黄金前3秒：</strong> 开头必须有视觉冲击或悬念钩子，完播率的关键。
+                        <strong>黄金前3秒：</strong>开头必须有视觉冲击或悬念钩子
                     </p>
                 </div>
                 <div className="flex items-start">
-                    <span className="bg-indigo-100 text-indigo-600 text-xs font-bold px-1.5 py-0.5 rounded mr-2 mt-0.5">视听</span>
+                    <span className="bg-indigo-100 text-indigo-600 text-xs font-bold px-1.5 py-0.5 rounded mr-2 mt-0.5 shrink-0">视听</span>
                     <p className="text-xs text-indigo-700 leading-relaxed">
-                        <strong>视听结合：</strong> 画面要配合口播节奏，避免"念稿式"枯燥画面。
+                        <strong>视听结合：</strong>画面配合口播节奏，避免"念稿式"
                     </p>
                 </div>
                 <div className="flex items-start">
-                    <span className="bg-indigo-100 text-indigo-600 text-xs font-bold px-1.5 py-0.5 rounded mr-2 mt-0.5">结构</span>
+                    <span className="bg-indigo-100 text-indigo-600 text-xs font-bold px-1.5 py-0.5 rounded mr-2 mt-0.5 shrink-0">结构</span>
                     <p className="text-xs text-indigo-700 leading-relaxed">
-                        <strong>情绪曲线：</strong> 引入 → 痛点 → 解决方案 → 升华/反转 → 互动。
+                        <strong>情绪曲线：</strong>引入→痛点→解决方案→升华→互动
                     </p>
                 </div>
             </div>
