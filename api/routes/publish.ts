@@ -1,10 +1,13 @@
 import { Router } from 'express';
 import { startCreatorLogin, getLoginState } from '../services/rpa/xiaohongshu.js';
+import { verifySessionWithRequest } from '../services/rpa/auth.js';
 import { enqueueTask } from '../services/queue.js';
 import { VideoProjectService } from '../services/video/VideoProjectService.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { validateBody } from '../middleware/validation.js';
+import { PublishSchema, LoginSchema } from '../schemas/index.js';
 
 const router = Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -34,12 +37,10 @@ router.post('/login', async (req, res) => {
 });
 
 // Trigger Publish (Async Task Queue)
-router.post('/publish', async (req, res) => {
-  const { title, content, tags, imageData, videoPath, autoPublish, scheduledAt, accountId, projectId, contentType } = req.body;
+router.post('/publish', validateBody(PublishSchema), async (req, res) => {
+  const { title, content, tags, imageData, videoPath, autoPublish, scheduledAt, accountId, projectId, draftId, contentType } = req.body;
   
-  if (!title || !content) {
-    return res.status(400).json({ error: 'Missing content' });
-  }
+  // Validation handled by middleware
   
   // Resolve video path if provided
   let resolvedVideoPath = videoPath;
@@ -66,30 +67,14 @@ router.post('/publish', async (req, res) => {
       }
   }
 
-  // [Pre-flight Check] Verify Session Validity
-  try {
-      // 1. Check if we have a valid session (Cookie check via lightweight API ping)
-      const isSessionValid = await verifySessionWithRequest(accountId);
-      
-      if (!isSessionValid) {
-          return res.status(401).json({ 
-              error: '发布失败：账号登录状态已失效。',
-              details: 'Cookies verification failed. Please re-login in the Account Manager.',
-              code: 'SESSION_EXPIRED'
-          });
-      }
-      
-      // 2. Asset Integrity Check (Basic)
-      if (imageData && Array.isArray(imageData)) {
-           // We could add logic here to check if local files exist, 
-           // but most image data comes as Base64 or URLs which are handled in the worker.
-      }
-
-  } catch (e) {
-      console.warn('[Publish] Pre-flight check warning:', e);
-      // We don't block on check error, but we warn.
-      // Or should we block? If verification errors out (e.g. network), maybe we shouldn't block.
-      // But if it returned false (handled in verifySessionWithRequest), we already returned 401.
+  // [Pre-flight Check] REMOVED due to instability with Axios vs XHS Bot Protection.
+  // We rely on the Worker (Puppeteer) to handle the session check during actual execution.
+  // This prevents false negatives where Axios gets blocked but the browser would succeed.
+  
+  // 2. Asset Integrity Check (Basic)
+  if (imageData && Array.isArray(imageData)) {
+       // We could add logic here to check if local files exist, 
+       // but most image data comes as Base64 or URLs which are handled in the worker.
   }
 
   try {
@@ -102,6 +87,7 @@ router.post('/publish', async (req, res) => {
         autoPublish, // Pass boolean
         accountId, // Pass target account
         projectId, // Pass projectId for status update
+        draftId, // Pass draftId for status update
         contentType // Pass content type to worker
     }, scheduledAt); // Pass scheduledAt (optional)
     

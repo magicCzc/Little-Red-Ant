@@ -5,6 +5,7 @@ import { scrapeNoteDetail } from './xiaohongshu.js';
 import { DataSanitizer } from '../../utils/DataSanitizer.js';
 import { CompetitorScraper } from '../scraper/CompetitorScraper.js';
 import { CompetitorService } from '../core/CompetitorService.js';
+import { RPAUtils } from './utils/RPAUtils.js';
 
 export async function scrapeCompetitor(input: string | { url: string, id?: number }) {
     // Normalize Input
@@ -46,8 +47,10 @@ export async function scrapeCompetitor(input: string | { url: string, id?: numbe
                     tags: detail.tags,
                     // If we scraped detail, we might have a better date, but let's stick to the basic flow for now
                 });
-                // Small delay to be nice
-                await new Promise(r => setTimeout(r, 2000));
+                // Rate Limit Check
+                await RPAUtils.checkRateLimit('xiaohongshu', 20, 60);
+                // Small random delay
+                await new Promise(r => setTimeout(r, Math.random() * 2000 + 1000));
             } catch (e: any) {
                 Logger.warn('RPA:Competitor', `Failed to scrape detail for ${note.title}: ${e.message}`);
                 detailedNotes.push(note);

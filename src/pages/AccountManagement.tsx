@@ -26,6 +26,7 @@ interface Account {
         desc: string;
         tone: string;
         sample: string;
+        image_url?: string; // New field
     };
   }
 
@@ -58,8 +59,10 @@ interface Account {
       niche: '',
       desc: '',
       tone: '',
-      sample: ''
+      sample: '',
+      image_url: '' // New field
   });
+  const personaImageInputRef = useRef<HTMLInputElement>(null);
 
   // Templates State
   const [templates, setTemplates] = useState<any[]>([]);
@@ -260,7 +263,8 @@ interface Account {
         niche: account.persona?.niche || '',
         desc: account.persona?.desc || '',
         tone: account.persona?.tone || '',
-        sample: account.persona?.sample || ''
+        sample: account.persona?.sample || '',
+        image_url: account.persona?.image_url || ''
     });
     setIsPersonaModalOpen(true);
   };
@@ -272,7 +276,8 @@ interface Account {
             niche: personaForm.niche,
             persona_desc: personaForm.desc,
             tone: personaForm.tone,
-            writing_sample: personaForm.sample
+            writing_sample: personaForm.sample,
+            persona_image_url: personaForm.image_url // Save image url
         });
         toast.success('人设配置已保存');
         setIsPersonaModalOpen(false);
@@ -282,6 +287,33 @@ interface Account {
     }
   };
 
+  const handlePersonaImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      try {
+          const toastId = toast.loading('正在上传定妆照...');
+          // Using the same endpoint as before (assuming generic asset upload)
+          const res = await fetch('/api/assets/upload', {
+              method: 'POST',
+              body: formData
+          });
+          
+          if (!res.ok) throw new Error('Upload failed');
+          
+          const data = await res.json();
+          setPersonaForm(prev => ({ ...prev, image_url: data.url }));
+          toast.success('定妆照上传成功', { id: toastId });
+      } catch (error) {
+          toast.error('上传失败');
+      } finally {
+          if (personaImageInputRef.current) personaImageInputRef.current.value = '';
+      }
+  };
+
   const handleApplyTemplate = (templateId: string) => {
       const tmpl = templates.find(t => t.id.toString() === templateId);
       if (tmpl) {
@@ -289,7 +321,8 @@ interface Account {
               niche: tmpl.niche || '',
               desc: `身份标签：${(tmpl.identity_tags || []).join(', ')}`, // Convert tags to desc
               tone: tmpl.style || '',
-              sample: (tmpl.writing_samples || [])[0] || ''
+              sample: (tmpl.writing_samples || [])[0] || '',
+              image_url: '' // Template doesn't have image yet
           });
           toast.success('已应用模板内容');
           setShowTemplateSelect(false);
@@ -344,150 +377,156 @@ interface Account {
             icon={Users}
           />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {accounts.map(account => (
-              <div 
-                key={account.id}
-                className={`
-                  relative p-4 rounded-lg border-2 transition-all
-                  ${account.is_active 
-                    ? 'border-indigo-500 bg-indigo-50 shadow-sm' 
-                    : 'border-gray-100 bg-white hover:border-gray-200'}
-                `}
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold text-lg overflow-hidden border border-gray-300">
-                      {account.avatar ? <img src={account.avatar} alt="avatar" className="w-full h-full object-cover"/> : account.nickname[0]}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {accounts.map(account => {
+              const isExpired = account.status === 'EXPIRED';
+              const isActive = account.is_active;
+              
+              return (
+                <div 
+                  key={account.id}
+                  className={`
+                    relative p-4 rounded-xl border transition-all duration-200
+                    ${isActive 
+                      ? 'border-indigo-500 bg-white shadow-md ring-1 ring-indigo-500/20' 
+                      : isExpired
+                        ? 'border-red-200 bg-red-50/30 hover:border-red-300'
+                        : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'}
+                  `}
+                >
+                  {/* Active Badge */}
+                  {isActive && (
+                    <div className="absolute -top-2 -right-2 bg-indigo-600 text-white text-xs px-2 py-0.5 rounded-full shadow-sm flex items-center">
+                      <UserCheck size={10} className="mr-1" />
+                      当前使用
                     </div>
-                    <div>
+                  )}
+                  
+                  {/* Header: Avatar + Name */}
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className={`
+                      w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold overflow-hidden
+                      ${isExpired ? 'bg-red-100 text-red-500' : 'bg-gradient-to-br from-indigo-100 to-purple-100 text-indigo-600'}
+                    `}>
+                      {account.avatar ? (
+                        <img src={account.avatar} alt="avatar" className="w-full h-full object-cover"/>
+                      ) : (
+                        account.nickname[0]
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                          <h3 className="font-bold text-gray-900">
-                              {editingAliasId === account.id ? (
-                                  <div className="flex items-center gap-1">
-                                      <input 
-                                          className="border rounded px-1 py-0.5 text-sm w-24"
-                                          value={aliasValue}
-                                          onChange={e => setAliasValue(e.target.value)}
-                                          autoFocus
-                                          onKeyDown={e => {
-                                              if (e.key === 'Enter') handleUpdateAlias(account.id);
-                                              if (e.key === 'Escape') setEditingAliasId(null);
-                                          }}
-                                      />
-                                      <button onClick={() => handleUpdateAlias(account.id)} className="text-green-600"><Check size={14}/></button>
-                                      <button onClick={() => setEditingAliasId(null)} className="text-gray-400"><X size={14}/></button>
-                                  </div>
-                              ) : (
-                                  <span className="flex items-center gap-1 group">
-                                      {account.alias || account.nickname}
-                                      {account.alias && <span className="text-xs text-gray-400 font-normal">({account.nickname})</span>}
-                                      <button 
-                                          onClick={() => {
-                                              setEditingAliasId(account.id);
-                                              setAliasValue(account.alias || '');
-                                          }}
-                                          className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-indigo-600 transition-opacity"
-                                      >
-                                          <Edit3 size={12} />
-                                      </button>
-                                  </span>
-                              )}
+                        {editingAliasId === account.id ? (
+                          <div className="flex items-center gap-1">
+                            <input 
+                              className="border rounded px-1.5 py-0.5 text-sm w-24"
+                              value={aliasValue}
+                              onChange={e => setAliasValue(e.target.value)}
+                              autoFocus
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') handleUpdateAlias(account.id);
+                                if (e.key === 'Escape') setEditingAliasId(null);
+                              }}
+                            />
+                            <button onClick={() => handleUpdateAlias(account.id)} className="text-green-600 p-0.5 hover:bg-green-50 rounded">
+                              <Check size={14}/>
+                            </button>
+                            <button onClick={() => setEditingAliasId(null)} className="text-gray-400 p-0.5 hover:bg-gray-100 rounded">
+                              <X size={14}/>
+                            </button>
+                          </div>
+                        ) : (
+                          <h3 className="font-bold text-gray-900 truncate group flex items-center gap-1">
+                            <span className="truncate">{account.alias || account.nickname}</span>
+                            <button 
+                              onClick={() => {
+                                setEditingAliasId(account.id);
+                                setAliasValue(account.alias || '');
+                              }}
+                              className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-indigo-600 transition-opacity p-0.5"
+                            >
+                              <Edit3 size={12} />
+                            </button>
                           </h3>
-                          {account.status === 'EXPIRED' && (
-                              <span className="bg-red-100 text-red-600 text-[10px] px-1.5 py-0.5 rounded border border-red-200 font-medium">
-                                  已失效
-                              </span>
-                          )}
+                        )}
                       </div>
-                      <p className="text-xs text-gray-500">
-                        {account.is_active ? '当前活跃' : `上次使用: ${new Date(account.last_used_at).toLocaleDateString()}`}
+                      <p className="text-xs text-gray-500 truncate">
+                        {account.alias ? account.nickname : `上次使用: ${new Date(account.last_used_at).toLocaleDateString()}`}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => handleOpenPersonaModal(account)}
-                        className="text-gray-400 hover:text-indigo-600 p-1 rounded-full hover:bg-indigo-50"
-                        title="人设配置"
-                    >
-                        <UserCog size={16} />
-                    </button>
-                    {account.is_active && (
-                        <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-1 rounded-full font-medium flex items-center">
-                        <UserCheck size={12} className="mr-1" />
-                        使用中
+
+                  {/* Status Badges */}
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {isExpired ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
+                        <AlertCircle size={10} className="mr-1" />
+                        Cookie已失效
+                      </span>
+                    ) : (
+                      <>
+                        <span className={`
+                          inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border
+                          ${account.has_creator_cookie 
+                            ? 'bg-green-50 text-green-700 border-green-200' 
+                            : 'bg-gray-50 text-gray-500 border-gray-200'}
+                        `}>
+                          {account.has_creator_cookie ? (
+                            <><Check size={10} className="mr-1" /> 可发布</>
+                          ) : (
+                            '未绑定发布'
+                          )}
                         </span>
+                        <span className={`
+                          inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border
+                          ${account.has_main_cookie 
+                            ? 'bg-green-50 text-green-700 border-green-200' 
+                            : 'bg-gray-50 text-gray-500 border-gray-200'}
+                        `}>
+                          {account.has_main_cookie ? (
+                            <><Check size={10} className="mr-1" /> 可浏览</>
+                          ) : (
+                            '未绑定浏览'
+                          )}
+                        </span>
+                      </>
                     )}
-                     <button
-                        onClick={() => confirmDelete(account.id)}
-                        className="text-gray-400 hover:text-red-500 p-1 rounded-full hover:bg-red-50"
-                        title="删除账号"
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-2">
+                    {!isActive && !isExpired && (
+                      <button
+                        onClick={() => handleSwitchAccount(account.id)}
+                        className="flex-1 py-1.5 text-xs font-medium text-center border border-indigo-200 text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors"
+                      >
+                        切换使用
+                      </button>
+                    )}
+                    {isExpired && (
+                      <button
+                        onClick={() => handleCreatorLogin(account.id)}
+                        className="flex-1 py-1.5 text-xs font-medium text-center bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                      >
+                        重新登录
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleOpenPersonaModal(account)}
+                      className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                     >
-                        <Trash2 size={16} />
+                      人设
+                    </button>
+                    <button
+                      onClick={() => confirmDelete(account.id)}
+                      className="px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
+                    >
+                      删除
                     </button>
                   </div>
                 </div>
-
-                {/* Permissions Status Grid */}
-                <div className="mt-3 space-y-2 border-t border-gray-200/50 pt-3">
-                    {/* Creator Permission */}
-                    <div className="flex items-center justify-between text-xs bg-white/50 p-2 rounded border border-gray-100">
-                        <span className="flex items-center text-gray-600 font-medium">
-                            <Edit3 size={14} className="mr-2 text-blue-500" /> 创作/发布权限
-                        </span>
-                        {scanning && scanType === 'BIND_CREATOR' && scanAccountId === account.id ? (
-                             <span className="text-blue-600 flex items-center"><Loader2 size={12} className="animate-spin mr-1"/> 绑定中...</span>
-                        ) : account.has_creator_cookie ? (
-                             <div className="flex items-center gap-2">
-                                <span className="text-green-600 flex items-center bg-green-50 px-2 py-0.5 rounded border border-green-100">
-                                    <Check size={10} className="mr-1" /> 已绑定
-                                </span>
-                                <button onClick={() => handleCreatorLogin(account.id)} className="text-gray-400 hover:text-blue-600" title="更新凭证">
-                                    <RefreshCw size={12} />
-                                </button>
-                             </div>
-                        ) : (
-                             <button onClick={() => handleCreatorLogin(account.id)} className="text-blue-600 hover:text-blue-800 hover:underline flex items-center font-medium">
-                                <LinkIcon size={12} className="mr-1" /> 立即绑定
-                             </button>
-                        )}
-                    </div>
-                    
-                    {/* Main Site Permission */}
-                    <div className="flex items-center justify-between text-xs bg-white/50 p-2 rounded border border-gray-100">
-                        <span className="flex items-center text-gray-600 font-medium">
-                            <Eye size={14} className="mr-2 text-purple-500" /> 浏览/互动权限
-                        </span>
-                         {scanning && scanType === 'BIND_MAIN' && scanAccountId === account.id ? (
-                             <span className="text-purple-600 flex items-center"><Loader2 size={12} className="animate-spin mr-1"/> 绑定中...</span>
-                        ) : account.has_main_cookie ? (
-                             <div className="flex items-center gap-2">
-                                <span className="text-green-600 flex items-center bg-green-50 px-2 py-0.5 rounded border border-green-100">
-                                    <Check size={10} className="mr-1" /> 已绑定
-                                </span>
-                                <button onClick={() => handleMainSiteLogin(account.id)} className="text-gray-400 hover:text-purple-600" title="更新凭证">
-                                    <RefreshCw size={12} />
-                                </button>
-                             </div>
-                        ) : (
-                             <button onClick={() => handleMainSiteLogin(account.id)} className="text-purple-600 hover:text-purple-800 hover:underline flex items-center font-medium">
-                                <LinkIcon size={12} className="mr-1" /> 立即绑定
-                             </button>
-                        )}
-                    </div>
-                </div>
-
-                {!account.is_active && (
-                    <button
-                      onClick={() => handleSwitchAccount(account.id)}
-                      className="w-full mt-3 py-1.5 text-xs text-center border border-indigo-200 text-indigo-600 rounded hover:bg-indigo-50 transition-colors"
-                    >
-                      切换为此账号
-                    </button>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -613,6 +652,49 @@ interface Account {
                         value={personaForm.tone}
                         onChange={e => setPersonaForm({...personaForm, tone: e.target.value})}
                     />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                        视觉定妆照 (Visual Persona)
+                    </label>
+                    <div className="flex items-start gap-4">
+                        <div className="w-24 h-24 bg-gray-100 rounded-lg border border-gray-300 flex items-center justify-center overflow-hidden relative group">
+                            {personaForm.image_url ? (
+                                <>
+                                    <img src={personaForm.image_url} alt="Persona" className="w-full h-full object-cover" />
+                                    <button 
+                                        onClick={() => setPersonaForm(prev => ({...prev, image_url: ''}))}
+                                        className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        <X size={12} />
+                                    </button>
+                                </>
+                            ) : (
+                                <Users size={32} className="text-gray-300" />
+                            )}
+                        </div>
+                        <div className="flex-1">
+                             <p className="text-xs text-gray-500 mb-2">
+                                上传一张该账号的固定人物形象（定妆照）。AI 生成配图时将优先参考此图，保持人物一致性。
+                             </p>
+                             <div className="flex gap-2">
+                                 <button
+                                    onClick={() => personaImageInputRef.current?.click()}
+                                    className="px-3 py-1.5 border border-gray-300 rounded text-xs font-medium text-gray-700 hover:bg-gray-50 flex items-center"
+                                 >
+                                     <LinkIcon size={12} className="mr-1" /> 上传照片
+                                 </button>
+                                 <input 
+                                    type="file" 
+                                    ref={personaImageInputRef} 
+                                    className="hidden" 
+                                    accept="image/*"
+                                    onChange={handlePersonaImageUpload}
+                                 />
+                                 {/* Future: Add "Generate by AI" button here */}
+                             </div>
+                        </div>
+                    </div>
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">

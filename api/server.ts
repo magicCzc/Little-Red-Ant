@@ -4,8 +4,10 @@
  */
 import app from './app.js';
 import { initCronJobs } from './services/cron.js';
+import { initCron as initSystemCron } from './cron.js';
 import { startWorker } from './worker.js';
 import { BrowserService } from './services/rpa/BrowserService.js';
+import { ComplianceService } from './services/core/ComplianceService.js';
 import db from './db.js';
 
 // Global Error Boundary
@@ -25,6 +27,14 @@ const PORT = process.env.PORT || 3001;
 
 // Initialize Cron Jobs
 initCronJobs();
+initSystemCron();
+
+// Start-up Compliance Sync (Non-blocking)
+// Wait 5s to let server start first
+// setTimeout(() => {
+//     console.log('[System] Triggering startup compliance rules sync...');
+//     ComplianceService.syncRules().catch(e => console.error('[System] Startup sync failed:', e));
+// }, 5000);
 
 // Recovery: Reset tasks that were stuck in PROCESSING state due to server restart
 try {

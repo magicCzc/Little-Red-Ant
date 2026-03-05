@@ -1,4 +1,3 @@
-
 import { chromium } from 'playwright-extra';
 import { Browser, BrowserContext, Page } from 'playwright';
 import stealthPlugin from 'puppeteer-extra-plugin-stealth';
@@ -12,7 +11,6 @@ import db from '../../db.js';
 chromium.use(stealthPlugin());
 
 const USER_DATA_DIR = path.join(process.cwd(), 'browser_data');
-const EXTENSION_PATH = path.join(process.cwd(), 'extensions');
 
 export class BrowserService {
     private static instance: BrowserService;
@@ -39,6 +37,18 @@ export class BrowserService {
     public async closeAll() {
         Logger.info('BrowserService', `Closing ${this.activeContexts.size} active browser contexts...`);
         
+        // Close persistent contexts
+        for (const [id, context] of this.activeProfiles.entries()) {
+            try {
+                await context.close();
+                Logger.info('BrowserService', `Closed persistent profile ${id}`);
+            } catch (e) {
+                Logger.error('BrowserService', `Failed to close profile ${id}`, e);
+            }
+        }
+        this.activeProfiles.clear();
+
+        // Close ad-hoc contexts
         for (const [id, session] of this.activeContexts.entries()) {
             try {
                 await session.context.close();
@@ -59,7 +69,6 @@ export class BrowserService {
      */
     public async getAuthenticatedPage(type: 'CREATOR' | 'MAIN_SITE' | 'ANONYMOUS', headless: boolean = true, accountId?: number): Promise<{ browser: BrowserContext, context: BrowserContext, page: Page }> {
         // Prepare User Data Dir based on Account ID to isolate profiles
-        // If Anonymous, use a temp dir? Or just a specific 'guest' dir.
         let targetAccountId = typeof accountId === 'number' ? accountId : undefined;
         
         if (!targetAccountId && type !== 'ANONYMOUS') {
@@ -74,36 +83,30 @@ export class BrowserService {
         const userDataDir = path.join(USER_DATA_DIR, profileName);
         
         // Concurrency Lock: Ensure only one browser instance per profile
-        // If profile is already active, return the existing context/page
         if (this.activeProfiles.has(profileName)) {
             Logger.info('BrowserService', `Reusing active context for ${profileName}`);
             const context = this.activeProfiles.get(profileName)!;
             
-            // Ensure context is still open
             try {
-                // Check if context has pages, if not create one
-                const page = context.pages().length > 0 ? context.pages()[0] : await context.newPage();
+                // Always create a new page for task isolation, do NOT reuse pages()[0]
+                const page = await context.newPage();
                 return { browser: context, context, page };
             } catch (e) {
-                // Context might be closed, remove from map and proceed to launch new
                 this.activeProfiles.delete(profileName);
             }
         }
 
-        // Wait for lock if another process is launching this profile
-        // Simple mutex
         while (this.profileLocks.has(profileName)) {
             Logger.info('BrowserService', `Waiting for profile lock: ${profileName}...`);
             await new Promise(r => setTimeout(r, 1000));
-            // Double check if active after wait
              if (this.activeProfiles.has(profileName)) {
                 const context = this.activeProfiles.get(profileName)!;
-                const page = context.pages().length > 0 ? context.pages()[0] : await context.newPage();
+                // Always create a new page for task isolation
+                const page = await context.newPage();
                 return { browser: context, context, page };
             }
         }
         
-        // Set lock
         let releaseLock: () => void;
         const lockPromise = new Promise<void>((resolve) => { releaseLock = resolve; });
         this.profileLocks.set(profileName, lockPromise);
@@ -115,7 +118,8 @@ export class BrowserService {
 
             Logger.info('BrowserService', `Launching Persistent Context for ${profileName} in ${userDataDir}`);
 
-            // Launch Persistent Context
+            // Launch Persistent Context with Stealth Plugin (via playwright-extra)
+            // Note: playwright-extra + stealthPlugin automatically handles navigator.webdriver
             const context = await chromium.launchPersistentContext(userDataDir, {
                 headless,
                 channel: 'chrome',
@@ -132,23 +136,22 @@ export class BrowserService {
                 args: [
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
-                    '--disable-blink-features=AutomationControlled',
+                    '--disable-blink-features=AutomationControlled', // Critical for stealth
                     '--disable-infobars',
                     '--window-size=1280,800',
+                    '--restore-last-session=false', // Disable restore session popup
+                    '--no-first-run',
+                    '--no-default-browser-check',
+                    '--hide-crash-restore-bubble' // Hide the "Chrome did not shut down correctly" bubble
                 ]
             });
 
-            // Register active profile
             this.activeProfiles.set(profileName, context);
             
-            // Clean up on close
             context.on('close', () => {
                 this.activeProfiles.delete(profileName);
                 Logger.info('BrowserService', `Profile ${profileName} closed/disconnected.`);
             });
-
-            // Inject Stealth Scripts
-            await this.injectStealthScripts(context);
 
             // Cookies Management
             if (type !== 'ANONYMOUS') {
@@ -163,133 +166,26 @@ export class BrowserService {
                 }
             }
 
-            const page = context.pages().length > 0 ? context.pages()[0] : await context.newPage();
+            // Always create a new page, don't use the default empty one
+            const page = await context.newPage();
             
-            // Apply Page-level Stealth
+            // Basic Headers
             await page.setExtraHTTPHeaders({
                 'Accept-Language': 'zh-CN,zh;q=0.9',
             });
             
-            await page.addInitScript(() => {
-                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-            });
+            // REMOVED: Manual stealth injection (injectStealthScripts)
+            // Rely on puppeteer-extra-plugin-stealth to handle:
+            // - navigator.webdriver
+            // - chrome.runtime
+            // - WebGL vendor/renderer
+            // - Plugins mock
 
             return { browser: context, context, page };
             
         } finally {
-            // Release lock
             this.profileLocks.delete(profileName);
             if (releaseLock!) releaseLock();
         }
-    }
-    
-    // Legacy support for closeAll - might need adjustment for persistent contexts
-    // ...
-
-    private async launchBrowser(headless: boolean = true): Promise<Browser> {
-        // Force Headed Mode for better pass rate if environment allows
-        // Check if we are in "Deep Analysis" mode (heuristic)
-        // Or we can just default to Headed for debugging
-        
-        // Strategy: Use Headed mode for all authentications to reduce detection risk
-        // Headless is faster but more detectable.
-        // Let's use the parameter but default to false (Headed) if not specified in production?
-        // No, keep existing behavior but allow override.
-        
-        // Ensure user data dir exists
-        if (!fs.existsSync(USER_DATA_DIR)) {
-            fs.mkdirSync(USER_DATA_DIR, { recursive: true });
-        }
-
-        const browser = await chromium.launch({
-            headless,
-            channel: 'chrome', // Try to use installed Chrome if available for better realism
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-blink-features=AutomationControlled', // Critical for stealth
-                '--disable-infobars',
-                '--window-size=1280,800',
-                // '--start-maximized' // Optional
-            ]
-        });
-
-        return browser;
-    }
-
-    private async createPage(browser: Browser, contextId: string, cookies: any[] = []): Promise<Page> {
-        const context = await browser.newContext({
-            viewport: { width: 1280, height: 800 },
-            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36', // Update to newer Chrome
-            locale: 'zh-CN',
-            timezoneId: 'Asia/Shanghai',
-            permissions: ['geolocation'],
-            geolocation: { longitude: 121.4737, latitude: 31.2304 }, // Shanghai
-            deviceScaleFactor: 1,
-            hasTouch: false,
-            isMobile: false,
-            javaScriptEnabled: true,
-        });
-        
-        // Add Stealth Scripts (Canvas Noise, etc.)
-        await this.injectStealthScripts(context);
-
-        if (cookies && cookies.length > 0) {
-            await context.addCookies(cookies);
-        }
-        
-        const page = await context.newPage();
-        
-        // Anti-detection: Hide webdriver property
-        await page.addInitScript(() => {
-            Object.defineProperty(navigator, 'webdriver', {
-                get: () => undefined,
-            });
-        });
-
-        this.activeContexts.set(contextId, { browser, context, page, lastUsed: Date.now() });
-        return page;
-    }
-
-    private async injectStealthScripts(context: BrowserContext) {
-        await context.addInitScript(() => {
-            // 1. Canvas Fingerprint Noise
-            const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
-            HTMLCanvasElement.prototype.toDataURL = function(type) {
-                const context = this.getContext('2d');
-                if (context) {
-                    // Shift a pixel slightly to alter the hash
-                    const imageData = context.getImageData(0, 0, this.width, this.height);
-                    // Minimal noise: change one pixel's alpha channel by 1
-                    if (imageData.data.length > 3) {
-                         imageData.data[3] = imageData.data[3] === 255 ? 254 : 255; 
-                         context.putImageData(imageData, 0, 0);
-                    }
-                }
-                return originalToDataURL.apply(this, arguments as any);
-            };
-
-            // 2. WebGL Fingerprint Noise
-            const getParameter = WebGLRenderingContext.prototype.getParameter;
-            WebGLRenderingContext.prototype.getParameter = function(parameter) {
-                // UNMASKED_VENDOR_WEBGL
-                if (parameter === 37445) {
-                    return 'Intel Inc.';
-                }
-                // UNMASKED_RENDERER_WEBGL
-                if (parameter === 37446) {
-                    return 'Intel Iris OpenGL Engine';
-                }
-                return getParameter.apply(this, [parameter]);
-            };
-            
-            // 3. Chrome Runtime Mock
-            if (!(window as any).chrome) {
-                // @ts-ignore
-                (window as any).chrome = {
-                    runtime: {}
-                };
-            }
-        });
     }
 }

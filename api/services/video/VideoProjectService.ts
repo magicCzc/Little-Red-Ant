@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import db from '../../db.js';
+import { FileCleanupService } from '../core/FileCleanupService.js'; // Import FileCleanupService
 
 export interface VideoProject {
     id: string;
@@ -129,7 +130,31 @@ export class VideoProjectService {
         return db.prepare('SELECT * FROM video_projects ORDER BY created_at DESC').all() as VideoProject[];
     }
 
-    static deleteProject(projectId: string) {
+    static async deleteProject(projectId: string) {
+        // 1. Collect files to delete
+        const project = db.prepare('SELECT final_video_url, bgm_url FROM video_projects WHERE id = ?').get(projectId) as any;
+        const scenes = db.prepare('SELECT video_url, audio_url FROM video_scenes WHERE project_id = ?').all(projectId) as any[];
+        
+        const filesToDelete: string[] = [];
+        if (project) {
+            if (project.final_video_url) filesToDelete.push(project.final_video_url);
+            // Don't delete bgm_url if it's a shared asset? 
+            // If it was uploaded specifically for this project, yes. But we don't know easily.
+            // For safety, let's assume BGM might be reused if it's in 'assets', but if it's temp, delete it.
+            // Our FileCleanupService handles 'uploads' and 'temp'. If user uploaded BGM, it's in uploads.
+            // Risk: User uses same BGM for 2 projects. If we delete here, other project breaks.
+            // Decision: Do NOT delete BGM automatically unless we reference count. Safe default: keep BGM.
+        }
+        
+        scenes.forEach(s => {
+            if (s.video_url) filesToDelete.push(s.video_url);
+            if (s.audio_url) filesToDelete.push(s.audio_url);
+        });
+
+        // 2. Delete files
+        await FileCleanupService.deleteFiles(filesToDelete);
+
+        // 3. Delete DB records
         db.transaction(() => {
             db.prepare('DELETE FROM video_scenes WHERE project_id = ?').run(projectId);
             db.prepare('DELETE FROM video_projects WHERE id = ?').run(projectId);

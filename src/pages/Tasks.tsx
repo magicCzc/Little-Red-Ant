@@ -3,6 +3,17 @@ import axios from 'axios';
 import { Clock, ArrowLeft, Loader2, RefreshCw, CheckCircle, XCircle, PlayCircle, AlertCircle, Eye, Calendar, List, ChevronLeft, ChevronRight, RotateCw } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import TaskProgress, { TaskStatusBadge, TaskTypeLabel } from '../components/TaskProgress';
+import FriendlyError from '../components/FriendlyError';
+import { wrapError } from '../utils/ErrorMessages';
+
+interface FriendlyErrorData {
+    code?: string;
+    title: string;
+    message: string;
+    suggestion: string;
+    severity: 'error' | 'warning' | 'info';
+}
 
 interface Task {
   id: string;
@@ -16,6 +27,8 @@ interface Task {
   updated_at: string;
   progress?: number;
   attempts?: number;
+  currentStep?: string;
+  friendlyError?: FriendlyErrorData;
 }
 
 export default function Tasks() {
@@ -30,7 +43,23 @@ export default function Tasks() {
   const [pageSize, setPageSize] = useState(20);
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 });
   
+  // Calendar Day Tasks Modal State
+  const [selectedDayTasks, setSelectedDayTasks] = useState<Task[] | null>(null);
+  const [selectedDayDate, setSelectedDayDate] = useState<Date | null>(null);
+  
   const navigate = useNavigate();
+  
+  // Open day tasks modal
+  const openDayTasks = (dayTasks: Task[], date: Date) => {
+      setSelectedDayTasks(dayTasks);
+      setSelectedDayDate(date);
+  };
+  
+  // Close day tasks modal
+  const closeDayTasks = () => {
+      setSelectedDayTasks(null);
+      setSelectedDayDate(null);
+  };
 
   useEffect(() => {
     fetchTasks();
@@ -216,8 +245,9 @@ export default function Tasks() {
       const { days, firstDay } = getDaysInMonth(currentDate);
       const cells = [];
       
+      // 空白格子
       for (let i = 0; i < firstDay; i++) {
-          cells.push(<div key={`empty-${i}`} className="h-32 bg-gray-50 border border-gray-100/50"></div>);
+          cells.push(<div key={`empty-${i}`} className="min-h-[100px] bg-gray-50/50 border border-gray-100"></div>);
       }
       
       for (let d = 1; d <= days; d++) {
@@ -229,30 +259,73 @@ export default function Tasks() {
           });
           
           const isToday = new Date().toDateString() === new Date(currentDate.getFullYear(), currentDate.getMonth(), d).toDateString();
+          const visibleTasks = dayTasks.slice(0, 3);
+          const hasMore = dayTasks.length > 3;
 
           cells.push(
-              <div key={d} className={`h-32 border border-gray-100 p-2 overflow-hidden hover:bg-gray-50 transition-colors relative group ${isToday ? 'bg-indigo-50/30 ring-1 ring-inset ring-indigo-200' : 'bg-white'}`}>
-                  <div className={`text-sm font-medium mb-1 ${isToday ? 'text-indigo-600' : 'text-gray-700'}`}>
-                      {d} {isToday && <span className="text-xs ml-1 font-normal">(今天)</span>}
+              <div key={d} className={`
+                  min-h-[100px] border border-gray-100 p-2 transition-all relative group
+                  ${isToday ? 'bg-indigo-50/40 border-l-4 border-l-indigo-500' : 'bg-white hover:bg-gray-50/50'}
+              `}>
+                  {/* 日期头部 */}
+                  <div className="flex items-center justify-between mb-2">
+                      <span className={`text-sm font-medium ${isToday ? 'text-indigo-700' : 'text-gray-700'}`}>
+                          {d}
+                      </span>
+                      {isToday && (
+                          <span className="text-[10px] px-1.5 py-0.5 bg-indigo-100 text-indigo-600 rounded-full font-medium">
+                              今天
+                          </span>
+                      )}
                   </div>
-                  <div className="space-y-1 overflow-y-auto max-h-[calc(100%-1.5rem)] no-scrollbar">
-                      {dayTasks.map(task => (
-                          <div key={task.id} className={`
-                              text-xs p-1.5 rounded border flex items-center gap-1.5 cursor-pointer hover:shadow-sm transition-shadow
-                              ${task.status === 'FAILED' ? 'bg-red-50 border-red-100 text-red-700' : 
-                                task.status === 'COMPLETED' ? 'bg-green-50 border-green-100 text-green-700' : 
-                                task.status === 'PROCESSING' ? 'bg-blue-50 border-blue-100 text-blue-700' :
-                                'bg-gray-50 border-gray-200 text-gray-600'}
-                          `} title={`${getTaskName(task.type)} - ${getStatusText(task)}`}>
-                              {getStatusIcon(task.status)}
-                              <span className="truncate flex-1">{task.payload?.title || getTaskName(task.type)}</span>
-                              {task.scheduled_at && <span className="text-[10px] opacity-75">{new Date(task.scheduled_at).getHours()}:{String(new Date(task.scheduled_at).getMinutes()).padStart(2, '0')}</span>}
+                  
+                  {/* 任务列表 */}
+                  <div className="space-y-1">
+                      {visibleTasks.map((task, index) => (
+                          <div 
+                              key={task.id} 
+                              className={`
+                                  text-[11px] px-2 py-1.5 rounded-md border cursor-pointer 
+                                  transition-all hover:shadow-md hover:scale-[1.02]
+                                  ${task.status === 'FAILED' ? 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100' : 
+                                    task.status === 'COMPLETED' ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100' : 
+                                    task.status === 'PROCESSING' ? 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100' :
+                                    'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}
+                              `}
+                              title={`${getTaskName(task.type)} - ${getStatusText(task)}${task.error ? '\n错误: ' + task.error : ''}`}
+                          >
+                              <div className="flex items-center gap-1.5">
+                                  <span className="flex-shrink-0">{getStatusIcon(task.status)}</span>
+                                  <span className="truncate flex-1 font-medium">{task.payload?.title || getTaskName(task.type)}</span>
+                              </div>
+                              {task.scheduled_at && (
+                                  <div className="text-[10px] opacity-70 mt-0.5 pl-5">
+                                      {new Date(task.scheduled_at).getHours()}:{String(new Date(task.scheduled_at).getMinutes()).padStart(2, '0')}
+                                  </div>
+                              )}
                           </div>
                       ))}
+                      
+                      {/* 更多任务提示 */}
+                      {hasMore && (
+                          <button 
+                              onClick={(e) => {
+                                  e.stopPropagation();
+                                  openDayTasks(dayTasks, new Date(currentDate.getFullYear(), currentDate.getMonth(), d));
+                              }}
+                              className="w-full text-[10px] text-gray-400 text-center py-1 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
+                          >
+                              +{dayTasks.length - 3} 更多任务
+                          </button>
+                      )}
                   </div>
+                  
+                  {/* 空状态提示 */}
                   {dayTasks.length === 0 && (
-                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none">
-                          <span className="text-xs text-gray-300">+ 添加任务</span>
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button className="text-xs text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded-full border border-dashed border-gray-300 hover:border-indigo-300 transition-all">
+                              + 添加
+                          </button>
                       </div>
                   )}
               </div>
@@ -402,59 +475,35 @@ export default function Tasks() {
                             {tasks.map(task => (
                                 <tr key={task.id} className="hover:bg-gray-50">
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="flex items-center">
-                                            {getStatusIcon(task.status)}
-                                            <div className="flex flex-col ml-2 w-full max-w-[140px]">
-                                                <div className="flex justify-between items-center">
-                                                    <span className={`text-sm font-medium 
-                                                        ${task.status === 'COMPLETED' ? 'text-green-600' : 
-                                                        task.status === 'FAILED' ? 'text-red-600' : 'text-gray-900'}`}>
-                                                        {getStatusText(task)}
-                                                    </span>
-                                                    {task.status === 'PROCESSING' && (
-                                                        <span className="text-xs text-blue-600 font-bold">{task.progress || 0}%</span>
-                                                    )}
-                                                </div>
-                                                
-                                                {/* Progress Bar for Processing */}
-                                                {task.status === 'PROCESSING' && (
-                                                    <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1 overflow-hidden">
-                                                        <div 
-                                                            className="bg-blue-500 h-1.5 rounded-full transition-all duration-500 ease-out" 
-                                                            style={{ width: `${task.progress || 5}%` }}
-                                                        ></div>
-                                                    </div>
-                                                )}
-                                                
-                                                {task.scheduled_at && task.status === 'PENDING' && (
-                                                    <span className="text-xs text-indigo-500">
-                                                        计划: {new Date(task.scheduled_at).toLocaleString()}
-                                                    </span>
-                                                )}
-                                                {task.status === 'FAILED' && task.attempts ? (
-                                                     <span className="text-[10px] text-red-400">重试次数: {task.attempts}</span>
-                                                ) : null}
-                                            </div>
-                                        </div>
+                                        <TaskStatusBadge status={task.status} progress={task.progress} />
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        {getTaskName(task.type)}
-                                        <div className="text-xs text-gray-400 font-mono mt-0.5">{task.id.substring(0, 8)}...</div>
-                                        {task.payload?.title && <div className="text-xs text-gray-500 truncate max-w-[150px]">{task.payload.title}</div>}
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <TaskTypeLabel type={task.type} />
+                                        <div className="text-xs text-gray-400 font-mono mt-1">{task.id.substring(0, 8)}...</div>
+                                        {task.payload?.title && (
+                                            <div className="text-xs text-gray-500 truncate max-w-[150px] mt-0.5">{task.payload.title}</div>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                         {new Date(task.created_at).toLocaleString()}
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-500">
-                                        {task.error ? (
-                                            <div className="flex items-start text-red-500">
-                                                <AlertCircle size={16} className="mr-1 flex-shrink-0 mt-0.5" />
-                                                <span className="line-clamp-2 max-w-[200px]" title={task.error}>{task.error}</span>
-                                            </div>
+                                    <td className="px-6 py-4 text-sm text-gray-500 max-w-[300px]">
+                                        {task.status === 'PROCESSING' ? (
+                                            <TaskProgress
+                                                status={task.status}
+                                                progress={task.progress}
+                                                currentStep={task.currentStep}
+                                                className="max-w-[250px]"
+                                            />
+                                        ) : task.status === 'FAILED' ? (
+                                            <FriendlyError
+                                                error={task.friendlyError || wrapError(task.error || 'Unknown error').friendly}
+                                                className="max-w-[250px]"
+                                            />
                                         ) : (
                                             <span>
-                                                {task.updated_at && task.created_at ? 
-                                                    `${((new Date(task.updated_at).getTime() - new Date(task.created_at).getTime()) / 1000).toFixed(1)}s` 
+                                                {task.updated_at && task.created_at ?
+                                                    `${((new Date(task.updated_at).getTime() - new Date(task.created_at).getTime()) / 1000).toFixed(1)}s`
                                                     : '-'}
                                             </span>
                                         )}
@@ -557,6 +606,105 @@ export default function Tasks() {
             )
         )}
       </div>
+      
+      {/* Day Tasks Modal */}
+      {selectedDayTasks && selectedDayDate && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+              <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+                  {/* Modal Header */}
+                  <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                      <div>
+                          <h3 className="text-lg font-bold text-gray-900">
+                              {selectedDayDate.getMonth() + 1}月{selectedDayDate.getDate()}日 任务列表
+                          </h3>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                              共 {selectedDayTasks.length} 个任务
+                          </p>
+                      </div>
+                      <button 
+                          onClick={closeDayTasks}
+                          className="text-gray-400 hover:text-gray-600 bg-white p-1.5 rounded-full border border-gray-200 hover:bg-gray-100 transition-colors"
+                      >
+                          <XCircle size={20}/>
+                      </button>
+                  </div>
+                  
+                  {/* Modal Body */}
+                  <div className="p-6 overflow-y-auto flex-1">
+                      <div className="space-y-3">
+                          {selectedDayTasks.map((task) => (
+                              <div 
+                                  key={task.id} 
+                                  className="p-4 rounded-lg border border-gray-200 hover:border-indigo-300 hover:shadow-md transition-all bg-white"
+                              >
+                                  <div className="flex items-start justify-between gap-4">
+                                      <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2 mb-2">
+                                              <TaskStatusBadge status={task.status} progress={task.progress} />
+                                              <TaskTypeLabel type={task.type} />
+                                          </div>
+                                          <h4 className="font-medium text-gray-900 mb-1 truncate">
+                                              {task.payload?.title || getTaskName(task.type)}
+                                          </h4>
+                                          <div className="flex items-center gap-4 text-xs text-gray-500">
+                                              <span>创建: {new Date(task.created_at).toLocaleString()}</span>
+                                              {task.scheduled_at && (
+                                                  <span>计划: {new Date(task.scheduled_at).toLocaleString()}</span>
+                                              )}
+                                          </div>
+                                          {task.status === 'FAILED' && task.error && (
+                                              <div className="mt-2">
+                                                  <FriendlyError
+                                                      error={task.friendlyError || wrapError(task.error).friendly}
+                                                      onRetry={() => handleRetry(task.id)}
+                                                  />
+                                              </div>
+                                          )}
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                          {task.status === 'COMPLETED' && task.type === 'GENERATE_CONTENT' && (
+                                              <button 
+                                                  onClick={() => handleViewResult(task)} 
+                                                  className="text-indigo-600 hover:text-indigo-900 flex items-center text-xs font-medium bg-indigo-50 px-3 py-1.5 rounded"
+                                              >
+                                                  <Eye size={14} className="mr-1" /> 查看
+                                              </button>
+                                          )}
+                                          {task.status === 'FAILED' && (
+                                              <button 
+                                                  onClick={() => handleRetry(task.id)}
+                                                  className="text-red-600 hover:text-red-900 flex items-center text-xs font-medium bg-red-50 px-3 py-1.5 rounded"
+                                              >
+                                                  <RotateCw size={14} className="mr-1" /> 重试
+                                              </button>
+                                          )}
+                                          {(task.status === 'PENDING' || task.status === 'PROCESSING') && (
+                                              <button 
+                                                  onClick={() => handleCancel(task.id)}
+                                                  className="text-gray-600 hover:text-gray-900 flex items-center text-xs font-medium bg-gray-100 px-3 py-1.5 rounded"
+                                              >
+                                                  <XCircle size={14} className="mr-1" /> 终止
+                                              </button>
+                                          )}
+                                      </div>
+                                  </div>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+                  
+                  {/* Modal Footer */}
+                  <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+                      <button 
+                          onClick={closeDayTasks}
+                          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                      >
+                          关闭
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 }

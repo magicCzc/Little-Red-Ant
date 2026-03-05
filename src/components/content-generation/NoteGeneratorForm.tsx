@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, BookOpen, Send, Loader2 } from 'lucide-react';
+import { FileText, BookOpen, Send, Loader2, Sparkles, MessageSquarePlus } from 'lucide-react';
 
 interface NoteGeneratorFormProps {
     topic: string;
@@ -15,13 +15,49 @@ interface NoteGeneratorFormProps {
     loading: boolean;
     onGenerate: (e: React.FormEvent) => void;
     errorMsg: string | null;
+    // New props
+    remixStructure?: any;
+    remixSourceTitle?: string;
+    customInstructions?: string;
+    setCustomInstructions?: (val: string) => void;
 }
 
 export default function NoteGeneratorForm({
     topic, setTopic, keywords, setKeywords, style, setStyle,
     contentType, setContentType, promptTemplates, activeAccount,
-    loading, onGenerate, errorMsg
+    loading, onGenerate, errorMsg,
+    remixStructure, remixSourceTitle, customInstructions, setCustomInstructions
 }: NoteGeneratorFormProps) {
+    
+    // Auto-fill style and instructions from Remix Structure
+    React.useEffect(() => {
+        if (remixStructure) {
+            // 1. Auto-fill Style
+            if (!style && setStyle) {
+                const tone = remixStructure.tone || '';
+                const hook = remixStructure.hook_type || '';
+                if (tone || hook) {
+                    setStyle(`[爆款风格] ${tone} ${hook ? `(钩子:${hook})` : ''}`);
+                }
+            }
+
+            // 2. Auto-fill Custom Instructions
+            if ((!customInstructions || customInstructions.trim() === '') && setCustomInstructions) {
+                const parts = [];
+                if (remixStructure.remix_template) {
+                    // Only include the detailed advice, excluding redundant CTA which is already in structure
+                    parts.push(`【请参考以下爆款仿写建议】\n${remixStructure.remix_template}`);
+                }
+                
+                // Note: cta_strategy is skipped here as it is already handled by the system prompt logic in ContentService
+                
+                if (parts.length > 0) {
+                    setCustomInstructions(parts.join('\n\n'));
+                }
+            }
+        }
+    }, [remixStructure]);
+
     return (
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
              {/* Header */}
@@ -69,6 +105,25 @@ export default function NoteGeneratorForm({
                         required
                         className="w-full p-3 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                     />
+                    
+                    {/* Remix Status Hint */}
+                    {remixStructure && (
+                        <div className="mt-2 p-3 bg-indigo-50 border border-indigo-100 rounded-md text-xs text-indigo-700 flex items-start animate-in fade-in slide-in-from-top-2">
+                            <Sparkles size={14} className="mr-2 mt-0.5 shrink-0 text-indigo-500" />
+                            <div>
+                                <span className="font-bold block mb-1">正在仿写爆款结构</span>
+                                <span className="opacity-80 block mb-1">
+                                    原标题：{remixSourceTitle || '未命名结构'} 
+                                </span>
+                                <span className="opacity-70 text-[10px] block mb-1">
+                                    AI 将保留原笔记的逻辑框架（{remixStructure.hook_type || '通用'}），并填充您的新内容。
+                                </span>
+                                <span className="text-green-600 font-medium flex items-center mt-1">
+                                    <MessageSquarePlus size={10} className="mr-1"/> 已自动填充「爆款风格」与「仿写策略」
+                                </span>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Keywords Input */}
@@ -119,6 +174,22 @@ export default function NoteGeneratorForm({
                         </p>
                     </div>
                 </div>
+
+                {/* Custom Instructions Input */}
+                {setCustomInstructions && (
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                            <MessageSquarePlus size={14} className="mr-1 text-gray-500" />
+                            补充指令 (可选)
+                        </label>
+                        <textarea
+                            value={customInstructions || ''}
+                            onChange={(e) => setCustomInstructions(e.target.value)}
+                            placeholder="补充更多给 AI 的指令，例如：'语气要更夸张一点'，'多引用一些数据'，'针对大学生群体'..."
+                            className="w-full p-3 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm min-h-[60px]"
+                        />
+                    </div>
+                )}
 
                 {errorMsg && (
                     <div className="p-3 bg-red-50 text-red-700 text-sm rounded-md">

@@ -2,56 +2,70 @@
 import { BrowserService } from './BrowserService.js';
 import { Logger } from '../LoggerService.js';
 
-// Define channel mapping
-const CHANNEL_MAP: Record<string, string> = {
-    'recommend': 'homefeed_recommend',
-    'video': 'homefeed.video_v3',
-    'fashion': 'homefeed.fashion_v3',
-    'beauty': 'homefeed.cosmetics_v3',
-    'food': 'homefeed.food_v3',
-    'home': 'homefeed.home_v3',
-    'travel': 'homefeed.travel_v3',
-    'tech': 'homefeed.tech_digital_v3',
-    'emotion': 'homefeed.love_v3',
-    'baby': 'homefeed.baby_v3',
-    'movie': 'homefeed.movie_and_tv_v3',
-    'knowledge': 'homefeed.education_v3',
-    'game': 'homefeed.game_v3',
-    'fitness': 'homefeed.fitness_v3',
-    'career': 'homefeed.career_v3',
-    'pets': 'homefeed.pets_v3',
-    'photography': 'homefeed.photography_v3',
-    'art': 'homefeed.art_v3',
-    'music': 'homefeed.music_v3',
-    'books': 'homefeed.books_v3',
-    'automobile': 'homefeed.automotive_v3',
-    'wedding': 'homefeed.wedding_v3',
-    'outdoors': 'homefeed.outdoors_v3',
-    'acg': 'homefeed.anime_v3',
-    'sports': 'homefeed.sports_v3',
-    'news': 'homefeed.news_v3'
-};
+    // Define channel mapping
+    const CHANNEL_MAP: Record<string, string> = {
+        'recommend': 'homefeed_recommend',
+        'video': 'homefeed.video_v3',
+        'fashion': 'homefeed.fashion_v3',
+        'beauty': 'homefeed.cosmetics_v3',
+        'food': 'homefeed.food_v3',
+        'home': 'homefeed.home_v3',
+        'travel': 'homefeed.travel_v3',
+        'tech': 'homefeed.tech_digital_v3',
+        'emotion': 'homefeed.love_v3',
+        'baby': 'homefeed.baby_v3',
+        'movie': 'homefeed.movie_and_tv_v3',
+        'knowledge': 'homefeed.education_v3',
+        'game': 'homefeed.game_v3',
+        'fitness': 'homefeed.fitness_v3',
+        'career': 'homefeed.career_v3',
+        'pets': 'homefeed.pets_v3',
+        'photography': 'homefeed.photography_v3',
+        'art': 'homefeed.art_v3',
+        'music': 'homefeed.music_v3',
+        'books': 'homefeed.books_v3',
+        'automobile': 'homefeed.automotive_v3',
+        'wedding': 'homefeed.wedding_v3',
+        'outdoors': 'homefeed.outdoors_v3',
+        'acg': 'homefeed.anime_v3',
+        'sports': 'homefeed.sports_v3',
+        'news': 'homefeed.news_v3'
+    };
 
 export async function scrapeTrending(category: string = 'recommend') {
     let session;
     try {
-        session = await BrowserService.getInstance().getAuthenticatedPage('MAIN_SITE', true);
+        session = await BrowserService.getInstance().getAuthenticatedPage('MAIN_SITE', true); // Force Headless
     } catch (e) {
         Logger.warn('RPA:Trends', 'Session issue, trying fallback...');
-        throw new Error('Need active session to scrape trends efficiently.');
+        // throw new Error('Need active session to scrape trends efficiently.');
+    }
+
+    if (!session) {
+        throw new Error('Failed to create browser session.');
     }
 
     const { page } = session;
     const collectedNotes = new Map(); // Use Map to deduplicate by ID
 
+    // Verify category in request URL to prevent data pollution
+    const expectedChannelId = CHANNEL_MAP[category] || 'homefeed_recommend';
+
     // Setup listener for Feed API
     const responseHandler = async (response: any) => {
         try {
             const url = response.url();
+            const request = response.request();
+            const requestUrl = request.url(); 
+            const postData = request.postData(); // Get POST body if any
             
             // Match feed APIs
+            // Note: Sometimes XHS uses /api/sns/web/v1/homefeed, sometimes just /feed
             if (url.includes('/api/sns/web/v1/homefeed') || url.includes('/api/sns/web/v1/feed')) {
-                Logger.info('RPA:Trends', `Intercepted feed response: ${url}`);
+                // LOOSE FILTERING: Accept all feeds to maximize data collection
+                // The client-side filter is better than missing data here.
+                
+                // Logger.info('RPA:Trends', `Intercepted feed response: ${url}`);
                 const json = await response.json();
                 
                 if (json.data && Array.isArray(json.data.items)) {
@@ -139,6 +153,7 @@ export async function scrapeTrending(category: string = 'recommend') {
                                 collects: collects,
                                 url: noteUrl,
                                 cover: cover,
+                                // images: images, // Pass full image list -> 'images' not defined, skipping or fixing
                                 author: item.user?.nickname || item.note_card?.user?.nickname || '',
                                 summary: item.desc || item.note_card?.desc || '',
                                 is_video: isVideo
@@ -181,7 +196,7 @@ export async function scrapeTrending(category: string = 'recommend') {
         Logger.error('RPA:Trends', `Scrape failed: ${error.message}`, error);
         throw error;
     } finally {
-        if (session && session.browser) {
+        if (page) {
             try { await page.close(); } catch(e) {}
         }
     }

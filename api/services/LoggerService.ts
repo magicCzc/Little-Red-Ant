@@ -1,55 +1,61 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import config from '../config.js';
+import winston from 'winston';
+import 'winston-daily-rotate-file';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-console.log('[Logger] __dirname:', __dirname);
-const logsDir = path.join(__dirname, '../../logs');
-console.log('[Logger] logsDir:', logsDir);
-
-// Ensure logs directory exists
-if (!fs.existsSync(logsDir)) {
-    fs.mkdirSync(logsDir, { recursive: true });
-}
-
+const logsDir = config.paths.logs;
 const screenshotsDir = path.join(logsDir, 'screenshots');
-if (!fs.existsSync(screenshotsDir)) {
-    fs.mkdirSync(screenshotsDir, { recursive: true });
+
+// Ensure directories exist
+if (!fs.existsSync(logsDir)) {
+    try { fs.mkdirSync(logsDir, { recursive: true }); } catch (e) {}
 }
+if (!fs.existsSync(screenshotsDir)) {
+    try { fs.mkdirSync(screenshotsDir, { recursive: true }); } catch (e) {}
+}
+
+// Configure Winston with Daily Rotate
+const transport = new winston.transports.DailyRotateFile({
+    filename: path.join(logsDir, 'app-%DATE%.log'),
+    datePattern: 'YYYY-MM-DD',
+    zippedArchive: true,
+    maxSize: '20m',
+    maxFiles: '14d' // Keep 2 weeks of logs
+});
+
+const logger = winston.createLogger({
+    level: config.logging.level || 'info',
+    format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.printf(({ timestamp, level, message, module, meta }) => {
+            const metaStr = meta ? (meta instanceof Error ? meta.stack : JSON.stringify(meta)) : '';
+            return `[${timestamp}] [${level.toUpperCase()}] [${module || 'App'}] ${message} ${metaStr}`;
+        })
+    ),
+    transports: [
+        new winston.transports.Console(),
+        transport
+    ]
+});
+
+type LogLevel = 'INFO' | 'WARN' | 'ERROR' | 'DEBUG';
 
 export class Logger {
     static info(module: string, message: string, meta?: any) {
-        this.log('INFO', module, message, meta);
+        logger.info(message, { module, meta });
     }
 
     static error(module: string, message: string, error?: any) {
-        this.log('ERROR', module, message, error);
+        logger.error(message, { module, meta: error });
     }
 
     static warn(module: string, message: string, meta?: any) {
-        this.log('WARN', module, message, meta);
+        logger.warn(message, { module, meta });
     }
 
-    private static log(level: string, module: string, message: string, meta?: any) {
-        const timestamp = new Date().toISOString();
-        const logEntry = `[${timestamp}] [${level}] [${module}] ${message} ${meta ? JSON.stringify(meta) : ''}\n`;
-        
-        // Console output
-        if (level === 'ERROR') {
-            console.error(logEntry.trim());
-        } else {
-            console.log(logEntry.trim());
-        }
-
-        // File output (Daily Rotate)
-        const dateStr = new Date().toISOString().split('T')[0];
-        const logFile = path.join(logsDir, `app-${dateStr}.log`);
-        
-        fs.appendFile(logFile, logEntry, (err) => {
-            if (err) console.error('Failed to write log:', err);
-        });
+    static debug(module: string, message: string, meta?: any) {
+        logger.debug(message, { module, meta });
     }
 
     static async saveScreenshot(page: any, name: string): Promise<string> {

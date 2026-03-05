@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { Sparkles, FileText, Video, Edit3, History, ChevronLeft, ChevronRight, RotateCw, Copy, Save, ExternalLink, Film, Loader2, Calendar, Wand2, X } from 'lucide-react';
+import { Sparkles, FileText, Video, Edit3, History, ChevronLeft, ChevronRight, RotateCw, Copy, Save, ExternalLink, Film, Loader2, Calendar, Wand2, X, Image as ImageIcon } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import CardGenerator, { CardGeneratorHandle } from '../components/CardGenerator';
 import ImageEditor from '../components/ImageEditor';
 import NoteEditor from '../components/NoteEditor';
 import ArticleEditor from '../components/ArticleEditor';
 import toast from 'react-hot-toast';
-import { useSafeAsync } from '../hooks/useSafeAsync';
 
 // New Components
 import TrendSidebar from '../components/content-generation/TrendSidebar';
@@ -15,102 +14,65 @@ import NoteGeneratorForm from '../components/content-generation/NoteGeneratorFor
 import VideoScriptGeneratorForm from '../components/content-generation/VideoScriptGeneratorForm';
 import ScriptReferenceSidebar from '../components/content-generation/ScriptReferenceSidebar';
 import VideoGeneratorForm from '../components/content-generation/VideoGeneratorForm';
+import ComplianceReport from '../components/content-generation/ComplianceReport';
 
-interface GeneratedContent {
-  title: string;
-  options: {
-    type: string;
-    label: string;
-    content: string;
-  }[];
-  tags: string[];
-  image_prompts: string[];
-  character_desc?: string;
-}
-
-interface GeneratedImage {
-  prompt: string;
-  url: string;
-  loading: boolean;
-  taskId?: string;
-}
-
-interface GenerationSession {
-  content: GeneratedContent;
-  images: GeneratedImage[];
-  timestamp: number;
-  taskId?: string;
-  status?: 'PENDING' | 'COMPLETED' | 'FAILED';
-  error?: string;
-}
-
-// Video Interfaces
-interface VideoSession {
-  type: 'video';
-  prompt: string;
-  imageUrl?: string;
-  videoUrl?: string;
-  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
-  error?: string;
-  timestamp: number;
-  taskId?: string;
-}
+// Hooks
+import { useContentGeneration, GeneratedContent, GeneratedImage, GenerationSession } from '../hooks/useContentGeneration';
+import { useVideoGeneration } from '../hooks/useVideoGeneration';
 
 export default function ContentGeneration() {
   const location = useLocation();
   const navigate = useNavigate();
   const cardGeneratorRef = useRef<CardGeneratorHandle>(null);
 
-  // Tab State: 'note' | 'video_script' | 'video'
+  // Tab State
   const [activeTab, setActiveTab] = useState<'note' | 'video_script' | 'video'>('note');
-  
-  // --- Note Generation State ---
-  const [contentType, setContentType] = useState<'note' | 'article' | 'video_script'>('note');
-  const [topic, setTopic] = useState('');
-  const [keywords, setKeywords] = useState('');
-  const [style, setStyle] = useState('');
-  const [characterDesc, setCharacterDesc] = useState<string>('');
-  const [loading, setLoading] = useState(false);
+
+  // --- Custom Hooks ---
+  const {
+    contentType, setContentType,
+    topic, setTopic,
+    keywords, setKeywords,
+    style, setStyle,
+    characterDesc, setCharacterDesc,
+    customInstructions, setCustomInstructions,
+    loading,
+    errorMsg,
+    history, setHistory,
+    currentIndex, setCurrentIndex,
+    remixStructure, setRemixStructure,
+    remixSourceTitle, setRemixSourceTitle,
+    handleGenerate: hookHandleGenerate,
+    handleGenerateImage,
+    isMounted
+  } = useContentGeneration();
+
+  const {
+    videoMode, setVideoMode,
+    videoPrompt, setVideoPrompt,
+    videoImageUrl, setVideoImageUrl,
+    videoLoading,
+    videoHistory, setVideoHistory,
+    currentVideoIndex, setCurrentVideoIndex,
+    videoError, setVideoError,
+    sceneVideos, setSceneVideos,
+    isStitching, setIsStitching,
+    stitchedVideoUrl, setStitchedVideoUrl,
+    creatingProject, setCreatingProject,
+    handleGenerateVideo: hookHandleGenerateVideo,
+    handleGenerateSceneVideo: hookHandleGenerateSceneVideo
+  } = useVideoGeneration();
+
+  // --- Local State (UI only) ---
   const [draftId, setDraftId] = useState<number | null>(null);
   const [promptTemplates, setPromptTemplates] = useState<{id: number, name: string, template: string}[]>([]);
-  const [remixStructure, setRemixStructure] = useState<any>(null);
-  const [remixSourceTitle, setRemixSourceTitle] = useState<string>('');
-  
-  // History State
-  const [history, setHistory] = useState<GenerationSession[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(-1);
-  
   const [selectedOptionIndex, setSelectedOptionIndex] = useState(0);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
+  
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishStatus, setPublishStatus] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [autoPublish, setAutoPublish] = useState(false); 
   const [scheduledTime, setScheduledTime] = useState(''); 
-  
-  // --- Video Generation State ---
-  const [videoMode, setVideoMode] = useState<'t2v' | 'i2v'>('t2v');
-  const [videoPrompt, setVideoPrompt] = useState('');
-  const [videoImageUrl, setVideoImageUrl] = useState('');
-  const [videoLoading, setVideoLoading] = useState(false);
-  const [videoHistory, setVideoHistory] = useState<VideoSession[]>([]);
-  const [currentVideoIndex, setCurrentVideoIndex] = useState(-1);
-  const [videoError, setVideoError] = useState<string | null>(null);
-
-  // V3.1 New: Scene Video State Management
-  interface SceneVideoState {
-      status: 'idle' | 'generating' | 'completed' | 'failed';
-      videoUrl?: string;
-      taskId?: string;
-      error?: string;
-  }
-  const [sceneVideos, setSceneVideos] = useState<Record<string, SceneVideoState>>({});
-  const [isStitching, setIsStitching] = useState(false);
-  const [stitchedVideoUrl, setStitchedVideoUrl] = useState<string | null>(null);
-  
-  // V3.2: Project State
-  const [creatingProject, setCreatingProject] = useState(false);
 
   // Image Editor State
   const [showImageEditor, setShowImageEditor] = useState(false);
@@ -128,17 +90,17 @@ export default function ContentGeneration() {
   // Selected Background Image for Card
   const [selectedBgImage, setSelectedBgImage] = useState<string | undefined>(undefined);
 
-  // ... (inside NoteEditor handler or new handler)
-  const handleSelectBgForCard = (url: string) => {
-      setSelectedBgImage(url);
-      toast.success('已选择为封面背景，请查看下方卡片预览');
-      // Scroll to bottom
-      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-  };
+  // Computed Values
   const currentSession = currentIndex >= 0 ? history[currentIndex] : null;
   const result = currentSession?.content || null;
   const generatedImages = currentSession?.images || [];
   const currentVideoSession = currentVideoIndex >= 0 ? videoHistory[currentVideoIndex] : null;
+
+  const handleSelectBgForCard = (url: string) => {
+      setSelectedBgImage(url);
+      toast.success('已选择为封面背景，请查看下方卡片预览');
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+  };
 
   // Fetch Active Account
   useEffect(() => {
@@ -148,9 +110,16 @@ export default function ContentGeneration() {
       }).catch(console.error);
   }, []);
 
+  // Fetch Prompts
+  useEffect(() => {
+    axios.get('/api/prompts')
+      .then(res => setPromptTemplates(res.data))
+      .catch(err => console.error('Failed to fetch prompts:', err));
+  }, []);
+
+  // Handle Location State (Navigation)
   useEffect(() => {
     if (location.state) {
-        // Safety check for state properties
         const state = location.state;
         
         if (state.remixNote) {
@@ -186,30 +155,18 @@ export default function ContentGeneration() {
             // Refined Logic for Content Type Detection
             let targetType: 'note' | 'article' | 'video_script' = 'note';
             
-            // 1. Trust explicit DB type if available and valid
             if (draft.content_type === 'video_script') {
                 targetType = 'video_script';
             } else if (draft.content_type === 'article') {
                 targetType = 'article';
             } else {
-                // 2. Heuristic Check for Legacy Drafts (or incorrectly saved ones)
                 const content = draft.content || '';
                 const trimmedContent = content.trim();
-                
-                // Strong signal: Starts with Markdown Title '#'
                 const hasMarkdownTitle = trimmedContent.startsWith('#');
-                
-                // Medium signal: Length > 800 chars
                 const isLongContent = content.length > 800;
-                
-                // Weak signal: Has images?
-                // Filter out empty strings or invalid URLs
                 const validImages = (draft.images || []).filter((img: string) => img && img.length > 0);
                 const hasImages = validImages.length > 0;
                 
-                // Decision Logic:
-                // If it has a markdown title, it's almost certainly an article structure, regardless of images.
-                // If it's very long and has NO images, it's likely an article.
                 if (hasMarkdownTitle) {
                     targetType = 'article';
                 } else if (isLongContent && !hasImages) {
@@ -217,21 +174,12 @@ export default function ContentGeneration() {
                 }
             }
 
-            console.log('Draft Load Debug:', { 
-                title: draft.title, 
-                dbType: draft.content_type, 
-                detectedType: targetType,
-                hasHash: draft.content?.includes('#') 
-            });
-
-            // Apply State with forced updates to ensure UI sync
             if (targetType === 'video_script') {
                 setActiveTab('video_script');
                 setContentType('video_script');
             } else if (targetType === 'article') {
                 setActiveTab('note'); 
                 setContentType('article');
-                // Force update to override any initial state defaults
                 setTimeout(() => {
                     setContentType('article');
                     toast.success('已自动切换至深度长文模式');
@@ -241,7 +189,21 @@ export default function ContentGeneration() {
                 setContentType('note');
             }
 
-            toast.success('已加载草稿内容');
+            // Restore Metadata (Context)
+            if (draft.meta_data) {
+                if (draft.meta_data.topic) setTopic(draft.meta_data.topic);
+                if (draft.meta_data.keywords) setKeywords(draft.meta_data.keywords);
+                if (draft.meta_data.style) setStyle(draft.meta_data.style);
+                if (draft.meta_data.remixStructure) setRemixStructure(draft.meta_data.remixStructure);
+                if (draft.meta_data.customInstructions) setCustomInstructions(draft.meta_data.customInstructions);
+                
+                // If it was a remix, show the source title if available (we might not have saved it, but structure is key)
+                if (draft.meta_data.remixStructure) {
+                    setRemixSourceTitle(draft.meta_data.remixStructure.hook_type || '已恢复的爆款结构');
+                }
+            }
+
+            toast.success('已加载草稿内容及创作上下文');
             
             const draftContent: GeneratedContent = {
                 title: draft.title,
@@ -254,10 +216,9 @@ export default function ContentGeneration() {
                 image_prompts: []
             };
 
-            // Restore images from draft
-            const restoredImages: GeneratedImage[] = (draft.images || []).map((url: string) => ({
-                prompt: '草稿恢复图片',
-                url: url,
+            const restoredImages: GeneratedImage[] = (draft.images || []).map((img: any) => ({
+                prompt: typeof img === 'string' ? '（图片已从草稿恢复，提示词不可用）' : (img.prompt || '（图片已从草稿恢复，提示词不可用）'),
+                url: typeof img === 'string' ? img : img.url,
                 loading: false
             }));
 
@@ -269,11 +230,10 @@ export default function ContentGeneration() {
             setCurrentIndex(0);
         } else if (state.fromAnalysis) {
             if (state.topic) setTopic(state.topic);
-            if (state.style) setStyle(state.style); // Apply style from analysis
+            if (state.style) setStyle(state.style);
             toast.success(`已加载推荐选题：${state.topic}`);
         }
         
-        // Handle Tab Switching from other pages
         if (state.activeTab) {
              setActiveTab(state.activeTab);
              if (state.activeTab === 'video_script') setContentType('video_script');
@@ -281,341 +241,43 @@ export default function ContentGeneration() {
     }
   }, [location.state]);
 
+  // Auto-Save Draft Effect
   useEffect(() => {
-    axios.get('/api/prompts')
-      .then(res => setPromptTemplates(res.data))
-      .catch(err => console.error('Failed to fetch prompts:', err));
-  }, []);
-
-  const { isMounted, abortControllerRef } = useSafeAsync();
-  const imageGenerationTimeouts = useRef<NodeJS.Timeout[]>([]);
-
-  useEffect(() => {
-    return () => {
-      imageGenerationTimeouts.current.forEach(clearTimeout);
-    };
-  }, []);
-
-  // Polling Effect for Content Generation
-  useEffect(() => {
-      const pendingSessions = history.map((s, i) => ({s, i})).filter(item => item.s.status === 'PENDING' && item.s.taskId);
-      if (pendingSessions.length === 0) return;
-
-      const interval = setInterval(async () => {
-          for (const {s, i} of pendingSessions) {
-              if (!s.taskId) continue;
-              try {
-                  const res = await axios.get(`/api/tasks/${s.taskId}`);
-                  const task = res.data;
-                  
-                  if (task.status === 'COMPLETED') {
-                      const newContent = task.result as GeneratedContent;
-                      
-                      let newImages: GeneratedImage[] = [];
-                      if (newContent.image_prompts) {
-                          newImages = newContent.image_prompts.map((p: string) => ({
-                              prompt: p,
-                              url: '',
-                              loading: true // Auto start loading
-                          }));
-                      }
-
-                      setHistory(prev => {
-                          const newH = [...prev];
-                          const index = newH.findIndex(h => h.taskId === s.taskId);
-                          if (index !== -1) {
-                              newH[index] = { 
-                                  ...newH[index], 
-                                  content: newContent, 
-                                  images: newImages,
-                                  status: 'COMPLETED' 
-                              };
-                          }
-                          return newH;
-                      });
-
-                      if ((newContent as any).character_desc) {
-                          setCharacterDesc((newContent as any).character_desc);
-                      }
-                      
-                      // Auto trigger image generation
-                      if (newImages.length > 0) {
-                          const currentIndex = history.findIndex(h => h.taskId === s.taskId);
-                          // Trigger for all images (async)
-                          newImages.forEach((_, imgIdx) => {
-                              handleGenerateImage(imgIdx, undefined, true);
-                          });
-                      }
-                  } else if (task.status === 'FAILED') {
-                      setHistory(prev => {
-                          const newH = [...prev];
-                          const index = newH.findIndex(h => h.taskId === s.taskId);
-                          if (index !== -1) {
-                              newH[index] = { ...newH[index], status: 'FAILED', error: task.error };
-                          }
-                          return newH;
-                      });
-                  }
-              } catch (e) { console.error('Poll error', e); }
-          }
-      }, 3000);
-
-      return () => clearInterval(interval);
-  }, [history]);
-
-  // Polling Effect for Image Generation
-  useEffect(() => {
-      const tasksToPoll: { sessionIndex: number, imageIndex: number, taskId: string }[] = [];
-      
-      history.forEach((session, sIdx) => {
-          session.images.forEach((img, iIdx) => {
-              if (img.loading && img.taskId && !img.url) {
-                  tasksToPoll.push({ sessionIndex: sIdx, imageIndex: iIdx, taskId: img.taskId });
-              }
-          });
-      });
-      
-      if (tasksToPoll.length === 0) return;
-
-      const interval = setInterval(async () => {
-          for (const taskItem of tasksToPoll) {
-               try {
-                   const res = await axios.get(`/api/tasks/${taskItem.taskId}`);
-                   const task = res.data;
-                   
-                   if (task.status === 'COMPLETED') {
-                       const imageUrl = task.result.url;
-                       setHistory(prev => {
-                           const newH = [...prev];
-                           if (!newH[taskItem.sessionIndex]) return newH;
-                           
-                           const session = { ...newH[taskItem.sessionIndex] };
-                           const images = [...session.images];
-                           
-                           if (images[taskItem.imageIndex] && images[taskItem.imageIndex].taskId === taskItem.taskId) {
-                               images[taskItem.imageIndex] = { 
-                                   ...images[taskItem.imageIndex], 
-                                   url: imageUrl, 
-                                   loading: false 
-                               };
-                               session.images = images;
-                               newH[taskItem.sessionIndex] = session;
-                           }
-                           return newH;
-                       });
-                       // Auto refresh draft images if we are in draft mode
-                       if (draftId && (currentIndex === taskItem.sessionIndex)) {
-                           // Debounced save could be better, but direct save ensures consistency
-                           // We skip auto-save to avoid overwriting content edits, but we update local state
-                       }
-                   } else if (task.status === 'FAILED') {
-                       setHistory(prev => {
-                           const newH = [...prev];
-                           if (!newH[taskItem.sessionIndex]) return newH;
-
-                           const session = { ...newH[taskItem.sessionIndex] };
-                           const images = [...session.images];
-                           if (images[taskItem.imageIndex] && images[taskItem.imageIndex].taskId === taskItem.taskId) {
-                               images[taskItem.imageIndex] = { 
-                                   ...images[taskItem.imageIndex], 
-                                   loading: false 
-                               };
-                               session.images = images;
-                               newH[taskItem.sessionIndex] = session;
-                           }
-                           return newH;
-                       });
-                   }
-               } catch(e) { console.error('Image poll error', e); }
-          }
-      }, 3000);
-      return () => clearInterval(interval);
-  }, [history]);
-
-  // Polling Effect for Videos
-  useEffect(() => {
-      const pendingVideos = videoHistory.map((s, i) => ({s, i})).filter(item => item.s.status === 'PENDING' && item.s.taskId);
-      if (pendingVideos.length === 0) return;
-
-      const interval = setInterval(async () => {
-          for (const {s, i} of pendingVideos) {
-              if (!s.taskId) continue;
-              try {
-                  const res = await axios.get(`/api/tasks/${s.taskId}`);
-                  const task = res.data;
-                  if (task.status === 'COMPLETED') {
-                      setVideoHistory(prev => {
-                          const newH = [...prev];
-                          const index = newH.findIndex(h => h.taskId === s.taskId);
-                          if (index !== -1) {
-                              newH[index] = { ...newH[index], status: 'COMPLETED', videoUrl: task.result.url };
-                          }
-                          return newH;
-                      });
-                  } else if (task.status === 'FAILED') {
-                      setVideoHistory(prev => {
-                          const newH = [...prev];
-                          const index = newH.findIndex(h => h.taskId === s.taskId);
-                          if (index !== -1) {
-                              newH[index] = { ...newH[index], status: 'FAILED', error: task.error };
-                          }
-                          return newH;
-                      });
-                  }
-              } catch(e) {}
-          }
-      }, 5000);
-      return () => clearInterval(interval);
-  }, [videoHistory]);
-
-  // Polling Effect for Scene Videos
-  useEffect(() => {
-      const pendingScenes = Object.entries(sceneVideos).filter(([_, state]) => state.status === 'generating' && state.taskId);
-      if (pendingScenes.length === 0) return;
-
-      const interval = setInterval(async () => {
-          for (const [key, state] of pendingScenes) {
-              if (!state.taskId) continue;
-              try {
-                  const res = await axios.get(`/api/tasks/${state.taskId}`);
-                  const task = res.data;
-                  if (task.status === 'COMPLETED') {
-                      setSceneVideos(prev => ({
-                          ...prev,
-                          [key]: { ...prev[key], status: 'completed', videoUrl: task.result.url }
-                      }));
-                  } else if (task.status === 'FAILED') {
-                      setSceneVideos(prev => ({
-                          ...prev,
-                          [key]: { ...prev[key], status: 'failed', error: task.error }
-                      }));
-                  }
-              } catch(e) {}
-          }
-      }, 5000);
-      return () => clearInterval(interval);
-  }, [sceneVideos]);
-
-  const handleGenerate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!topic.trim()) return;
-
-    if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
+    // Check if we have a valid result and it's a newly generated content (not just loaded history)
+    // We can use currentSession timestamp or ID to track
+    if (result && currentSession?.status === 'COMPLETED' && !draftId && !isSaving) {
+         // Debounce or check if already auto-saved for this session?
+         // Simplest way: Check if this session ID has been saved. 
+         // But we don't have a session ID easily accessible that persists across saves.
+         // Let's just auto-save if draftId is null (new generation) and result exists.
+         // But wait, if user generates again, draftId might still be null if we didn't update it?
+         // Actually, handleSaveDraft sets draftId.
+         
+         // Better logic: 
+         // When generation completes (status becomes COMPLETED), trigger save.
+         // We need to avoid infinite loops or saving old history.
+         
+         // Let's use a ref to track the last auto-saved task ID
+         if (currentSession.taskId && lastAutoSavedTaskIdRef.current !== currentSession.taskId) {
+             console.log('Auto-saving new generation:', currentSession.taskId);
+             handleSaveDraft();
+             lastAutoSavedTaskIdRef.current = currentSession.taskId;
+         }
     }
-    abortControllerRef.current = new AbortController();
+  }, [currentSession, result, draftId, isSaving]);
 
-    setLoading(true);
-    setSelectedOptionIndex(0);
-    setErrorMsg(null);
-    setPublishStatus(null); 
+  const lastAutoSavedTaskIdRef = useRef<string | null>(null);
 
-    try {
-      const keywordList = keywords.split(/[,，\s]+/).filter(k => k.trim());
-      const res = await axios.post('/api/generate/content', {
-        topic: topic.trim(),
-        keywords: keywordList,
-        style,
-        character_desc: characterDesc, 
-        remix_structure: remixStructure, 
-        contentType, 
-        accountId: activeAccount?.id 
-      }, { signal: abortControllerRef.current.signal });
-
-      setRemixStructure(null); 
-      setRemixSourceTitle('');
-
-      const { taskId } = res.data;
-      
-      const placeholderSession: GenerationSession = {
-          content: { title: topic, options: [], tags: [], image_prompts: [] },
-          images: [],
-          timestamp: Date.now(),
-          taskId: taskId,
-          status: 'PENDING'
-      };
-
-      setHistory(prev => [...prev, placeholderSession]);
-      setCurrentIndex(prev => prev + 1);
-      
-      toast.success('生成任务已提交，请在全局任务监控中查看进度');
-      
-    } catch (error: any) {
-      if (axios.isCancel(error)) return;
-      console.error('Generation failed:', error);
-      const msg = error.response?.data?.error || '任务提交失败，请重试';
-      setErrorMsg(msg);
-      toast.error(msg);
-    } finally {
-      if (isMounted.current) {
-          setLoading(false);
-      }
-    }
+  // Wrappers for Hook Functions
+  const handleGenerate = (e: React.FormEvent) => {
+      e.preventDefault();
+      setSelectedOptionIndex(0);
+      setPublishStatus(null);
+      hookHandleGenerate(activeAccount?.id);
   };
 
-  const handleGenerateImage = async (imageIndex: number, promptOverride?: string, isAutoTrigger = false) => {
-      if (!isMounted.current) return;
-      const prompt = promptOverride || ''; 
-
-      setHistory(prev => {
-          const idx = isAutoTrigger ? prev.length - 1 : currentIndex;
-          if (idx < 0 || idx >= prev.length) return prev;
-          
-          const newHistory = [...prev];
-          const session = { ...newHistory[idx] };
-          const images = [...session.images];
-          
-          if (!prompt && images[imageIndex]) promptOverride = images[imageIndex].prompt;
-          
-          images[imageIndex] = { ...images[imageIndex], loading: true };
-          session.images = images;
-          newHistory[idx] = session;
-          return newHistory;
-      });
-      
-      try {
-          // Use promptOverride if provided, otherwise fallback to the stored prompt in history
-          const finalPrompt = promptOverride || history[isAutoTrigger ? history.length - 1 : currentIndex]?.images[imageIndex]?.prompt;
-
-          if (!finalPrompt) {
-               console.error('No prompt found for image generation');
-               throw new Error('Prompt is required');
-          }
-
-          const res = await axios.post('/api/generate/image', { prompt: finalPrompt });
-          const { taskId } = res.data;
-
-          setHistory(prev => {
-              const idx = isAutoTrigger ? prev.length - 1 : currentIndex;
-              if (idx < 0 || idx >= prev.length) return prev;
-              const newHistory = [...prev];
-              const session = { ...newHistory[idx] };
-              const images = [...session.images];
-              images[imageIndex] = { ...images[imageIndex], taskId: taskId };
-              session.images = images;
-              newHistory[idx] = session;
-              return newHistory;
-          });
-          
-          toast.success('图片生成任务已提交');
-          
-      } catch (e) {
-          if (!isMounted.current) return;
-          console.error('Image gen failed:', e);
-          setHistory(prev => {
-              const idx = isAutoTrigger ? prev.length - 1 : currentIndex;
-              if (idx < 0 || idx >= prev.length) return prev;
-              const newHistory = [...prev];
-              const session = { ...newHistory[idx] };
-              const images = [...session.images];
-              
-              images[imageIndex] = { ...images[imageIndex], loading: false };
-              session.images = images;
-              newHistory[idx] = session;
-              return newHistory;
-          });
-          toast.error('图片生成任务提交失败');
-      }
+  const handleGenerateVideo = (e: React.FormEvent) => {
+      hookHandleGenerateVideo(e, activeAccount?.id);
   };
 
   const handleUpdateImagePrompt = (imageIndex: number, newPrompt: string) => {
@@ -632,18 +294,25 @@ export default function ContentGeneration() {
       });
   };
 
-  const handleSaveDraft = async () => {
+    const handleSaveDraft = async () => {
     if (!result) return;
     setIsSaving(true);
     try {
-      let imagePayload: string[] = [];
-      const validAiImages = generatedImages.filter(img => img.url).map(img => img.url);
+      let imagePayload: any[] = [];
+      
+      // Save full image objects {url, prompt} instead of just strings
+      // Filter out empty URLs but keep the prompt for context if needed (though drafts usually need url)
+      // Actually, we should only save valid images that have been generated
+      const validAiImages = generatedImages.filter(img => img.url).map(img => ({
+          url: img.url,
+          prompt: img.prompt
+      }));
       
       if (validAiImages.length > 0) {
           imagePayload = validAiImages;
       } else if (cardGeneratorRef.current) {
           const cardImage = await cardGeneratorRef.current.generateImage();
-          if (cardImage) imagePayload = [cardImage];
+          if (cardImage) imagePayload = [{ url: cardImage, prompt: '封面卡片' }];
       }
 
       const payload = {
@@ -656,15 +325,15 @@ export default function ContentGeneration() {
 
       if (draftId) {
         const res = await axios.put(`/api/drafts/${draftId}`, payload);
-        // Update images in UI if they were localized
         if (res.data.images) {
             setHistory(prev => {
                 const newHistory = [...prev];
                 const session = { ...newHistory[currentIndex] };
                 const images = [...session.images];
                 
-                // Update URLs in place
-                res.data.images.forEach((newUrl: string, i: number) => {
+                // Merge back localized images
+                res.data.images.forEach((newImg: any, i: number) => {
+                    const newUrl = typeof newImg === 'string' ? newImg : newImg.url;
                     if (images[i]) images[i] = { ...images[i], url: newUrl };
                 });
                 
@@ -677,14 +346,14 @@ export default function ContentGeneration() {
       } else {
         const res = await axios.post('/api/drafts', payload);
         setDraftId(res.data.id);
-        // Update images in UI if they were localized
         if (res.data.images) {
             setHistory(prev => {
                 const newHistory = [...prev];
                 const session = { ...newHistory[currentIndex] };
                 const images = [...session.images];
                 
-                res.data.images.forEach((newUrl: string, i: number) => {
+                res.data.images.forEach((newImg: any, i: number) => {
+                    const newUrl = typeof newImg === 'string' ? newImg : newImg.url;
                     if (images[i]) images[i] = { ...images[i], url: newUrl };
                 });
                 
@@ -740,7 +409,8 @@ export default function ContentGeneration() {
         imageData: imagePayload,
         autoPublish,
         scheduledAt: scheduledTime ? new Date(scheduledTime).toISOString() : undefined,
-        contentType: contentType
+        contentType: contentType,
+        accountId: activeAccount?.id // Explicitly pass accountId
       };
 
       const res = await axios.post('/api/publish/publish', payload);
@@ -757,7 +427,37 @@ export default function ContentGeneration() {
       
     } catch (error: any) {
       console.error('Publish failed:', error);
-      const errorMsg = error.response?.data?.error || error.message;
+      const errorData = error.response?.data;
+      const errorMsg = errorData?.error || error.message;
+
+      if (errorData?.code === 'SESSION_EXPIRED') {
+          setPublishStatus('发布中断：账号登录状态已失效');
+          toast((t) => (
+              <div className="flex flex-col">
+                  <span className="font-medium mb-2">账号登录已失效</span>
+                  <span className="text-sm text-gray-500 mb-3">请前往账号矩阵重新登录小红书账号。</span>
+                  <div className="flex gap-2">
+                      <button 
+                          onClick={() => {
+                              toast.dismiss(t.id);
+                              navigate('/accounts');
+                          }}
+                          className="px-3 py-1 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700"
+                      >
+                          去登录账号
+                      </button>
+                      <button 
+                          onClick={() => toast.dismiss(t.id)}
+                          className="px-3 py-1 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300"
+                      >
+                          关闭
+                      </button>
+                  </div>
+              </div>
+          ), { duration: 8000, icon: '🔒' });
+          return;
+      }
+
       setPublishStatus(`发布流程中断: ${errorMsg}`);
       toast.error(`发布流程中断: ${errorMsg}`);
     } finally {
@@ -765,7 +465,41 @@ export default function ContentGeneration() {
     }
   };
 
-  const handleSaveContentEdit = () => {
+  const [isFixingCompliance, setIsFixingCompliance] = useState(false);
+
+  const handleAutoFixCompliance = async () => {
+      if (!result || !result.risk_warnings) return;
+      
+      setIsFixingCompliance(true);
+      try {
+          const currentContent = result.options?.[selectedOptionIndex]?.content || '';
+          
+          const res = await axios.post('/api/compliance/fix', {
+              content: currentContent,
+              blockedWords: result.risk_warnings.blocked,
+              suggestions: result.risk_warnings.suggestions
+          });
+          
+          const fixedContent = res.data.fixedContent;
+          
+          if (fixedContent) {
+              setEditedContent(fixedContent);
+              // Directly save and check again
+              await handleSaveContentEdit(fixedContent);
+              toast.success('已自动修复违规内容');
+          }
+      } catch (error) {
+          console.error('Auto fix failed', error);
+          toast.error('修复失败，请重试');
+      } finally {
+          setIsFixingCompliance(false);
+      }
+  };
+
+  const handleSaveContentEdit = async (contentToSave?: string) => {
+    const contentVal = contentToSave !== undefined ? contentToSave : editedContent;
+
+    // 1. Optimistic Update
     setHistory(prev => {
         if (currentIndex < 0 || currentIndex >= prev.length) return prev;
         const newHistory = [...prev];
@@ -776,7 +510,7 @@ export default function ContentGeneration() {
             content.options = [...content.options]; 
             content.options[selectedOptionIndex] = {
                 ...content.options[selectedOptionIndex],
-                content: editedContent
+                content: contentVal
             };
         }
         
@@ -785,77 +519,66 @@ export default function ContentGeneration() {
         return newHistory;
     });
     
-    setIsEditingContent(false);
-    toast.success('内容已更新');
+    if (contentToSave === undefined) {
+         setIsEditingContent(false);
+         toast.success('内容已更新');
+    }
+
+    // 2. Background Compliance Check
+    try {
+        const currentTitle = result?.title || '';
+        const fullContent = currentTitle + '\n' + contentVal;
+        
+        const res = await axios.post('/api/compliance/check', { content: fullContent });
+        const checkResult = res.data;
+
+        setHistory(prev => {
+            if (currentIndex < 0 || currentIndex >= prev.length) return prev;
+            const newHistory = [...prev];
+            const session = { ...newHistory[currentIndex] };
+            const content = { ...session.content };
+            
+            content.risk_warnings = {
+                blocked: checkResult.blockedWords,
+                warnings: checkResult.warningWords,
+                suggestions: checkResult.suggestions,
+                score: checkResult.score
+            };
+            
+            session.content = content;
+            newHistory[currentIndex] = session;
+            return newHistory;
+        });
+    } catch (e) {
+        console.error('Compliance check failed', e);
+    }
   };
 
-  const handleGenerateVideo = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!videoPrompt?.trim()) return;
-      if (videoMode === 'i2v' && !videoImageUrl.trim()) {
-          setVideoError('图生视频模式需要提供图片 URL');
-          return;
-      }
-
-      setVideoLoading(true);
-      setVideoError(null);
-
+  const parseScript = (content: string) => {
       try {
-          const res = await axios.post('/api/generate/video', {
-              prompt: videoPrompt,
-              imageUrl: videoMode === 'i2v' ? videoImageUrl : undefined
-          });
-
-          const { taskId } = res.data;
+          const lines = content.split('\n').filter(l => l.trim().startsWith('|'));
+          if (lines.length < 3) return []; 
           
-          const newSession: VideoSession = {
-              type: 'video',
-              prompt: videoPrompt,
-              imageUrl: videoMode === 'i2v' ? videoImageUrl : undefined,
-              status: 'PENDING',
-              timestamp: Date.now(),
-              taskId: taskId
-          };
-
-          setVideoHistory(prev => [...prev, newSession]);
-          setCurrentVideoIndex(prev => prev + 1);
-          
-          toast.success('视频生成任务已提交');
-
-      } catch (error: any) {
-          console.error('Video Gen Error:', error);
-          setVideoError(error.message || '生成失败');
-      } finally {
-          setVideoLoading(false);
+          const dataLines = lines.slice(2);
+          return dataLines.map(line => {
+              const cols = line.split('|').map(c => c.trim());
+              if (cols.length < 4) return null;
+              
+              return {
+                  shot: cols[1] || '',
+                  visual: cols[2] || '',
+                  audio: cols[3] || '',
+                  note: cols[4] || ''
+              };
+          }).filter(item => item !== null);
+      } catch (e) {
+          return [];
       }
   };
 
   const handleGenerateSceneVideo = async (sceneIndex: number, prompt: string) => {
       const key = `${currentIndex}-${selectedOptionIndex}-${sceneIndex}`;
-      
-      try {
-          const res = await axios.post('/api/generate/video', {
-              prompt: prompt,
-              imageUrl: undefined 
-          });
-
-          const { taskId } = res.data;
-
-          setSceneVideos(prev => ({
-              ...prev,
-              [key]: { status: 'generating', taskId: taskId }
-          }));
-          
-          toast.success('镜头生成任务已提交');
-
-      } catch (error: any) {
-          console.error(error);
-          setSceneVideos(prev => ({
-              ...prev,
-              [key]: { status: 'failed', error: error.message }
-          }));
-          toast.error(`镜头 ${sceneIndex + 1} 生成失败`);
-      }
+      hookHandleGenerateSceneVideo(key, prompt);
   };
 
   const handleBatchGenerateVideos = async () => {
@@ -960,28 +683,6 @@ export default function ContentGeneration() {
     toast.success('图片编辑完成！');
   };
 
-  const parseScript = (content: string) => {
-      try {
-          const lines = content.split('\n').filter(l => l.trim().startsWith('|'));
-          if (lines.length < 3) return []; 
-          
-          const dataLines = lines.slice(2);
-          return dataLines.map(line => {
-              const cols = line.split('|').map(c => c.trim());
-              if (cols.length < 4) return null;
-              
-              return {
-                  shot: cols[1] || '',
-                  visual: cols[2] || '',
-                  audio: cols[3] || '',
-                  note: cols[4] || ''
-              };
-          }).filter(item => item !== null);
-      } catch (e) {
-          return [];
-      }
-  };
-
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto">
@@ -1022,10 +723,9 @@ export default function ContentGeneration() {
         </div>
 
         {activeTab === 'note' || activeTab === 'video_script' ? (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Left Column: Context & Reference */}
-            <div className="lg:col-span-1 space-y-6">
-                
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left Column: Hot Trends - Narrower */}
+            <div className="lg:col-span-3 space-y-4">
                 {/* 1. Note Mode: Trends */}
                 {activeTab === 'note' && (
                     <TrendSidebar onSelectTopic={setTopic} />
@@ -1042,44 +742,61 @@ export default function ContentGeneration() {
                         setShowStructureModal={setShowStructureModal}
                     />
                 )}
-
-                {/* 3. Forms */}
-                {activeTab === 'note' ? (
-                    <NoteGeneratorForm 
-                        topic={topic}
-                        setTopic={setTopic}
-                        keywords={keywords}
-                        setKeywords={setKeywords}
-                        style={style}
-                        setStyle={setStyle}
-                        contentType={contentType}
-                        setContentType={setContentType}
-                        promptTemplates={promptTemplates}
-                        activeAccount={activeAccount}
-                        loading={loading}
-                        onGenerate={handleGenerate}
-                        errorMsg={errorMsg}
-                    />
-                ) : (
-                    <VideoScriptGeneratorForm
-                        topic={topic}
-                        setTopic={setTopic}
-                        keywords={keywords}
-                        setKeywords={setKeywords}
-                        style={style}
-                        setStyle={setStyle}
-                        promptTemplates={promptTemplates}
-                        activeAccount={activeAccount}
-                        loading={loading}
-                        onGenerate={handleGenerate}
-                        errorMsg={errorMsg}
-                        remixStructure={remixStructure}
-                    />
-                )}
             </div>
 
-            {/* Right Column: Result (To be refactored later, kept here for stability) */}
-            <div className="lg:col-span-2 space-y-6">
+            {/* Right Column: Main Content Area - Wider */}
+            <div className="lg:col-span-9 space-y-4">
+                {/* Configuration Form - Always visible */}
+                <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-indigo-50/50 to-purple-50/50">
+                        <h3 className="font-semibold text-gray-800 flex items-center">
+                            <Edit3 size={18} className="mr-2 text-indigo-600" />
+                            创作配置
+                        </h3>
+                    </div>
+                    <div className="p-6">
+                        {activeTab === 'note' ? (
+                            <NoteGeneratorForm 
+                                topic={topic}
+                                setTopic={setTopic}
+                                keywords={keywords}
+                                setKeywords={setKeywords}
+                                style={style}
+                                setStyle={setStyle}
+                                contentType={contentType}
+                                setContentType={setContentType}
+                                promptTemplates={promptTemplates}
+                                activeAccount={activeAccount}
+                                loading={loading}
+                                onGenerate={handleGenerate}
+                                errorMsg={errorMsg}
+                                remixStructure={remixStructure}
+                                remixSourceTitle={remixSourceTitle}
+                                customInstructions={customInstructions}
+                                setCustomInstructions={setCustomInstructions}
+                            />
+                        ) : (
+                            <VideoScriptGeneratorForm
+                                topic={topic}
+                                setTopic={setTopic}
+                                keywords={keywords}
+                                setKeywords={setKeywords}
+                                style={style}
+                                setStyle={setStyle}
+                                promptTemplates={promptTemplates}
+                                activeAccount={activeAccount}
+                                loading={loading}
+                                onGenerate={handleGenerate}
+                                errorMsg={errorMsg}
+                                remixStructure={remixStructure}
+                                customInstructions={customInstructions}
+                                setCustomInstructions={setCustomInstructions}
+                            />
+                        )}
+                    </div>
+                </div>
+
+                {/* Result Section */}
                 {result ? (
                 <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
                     {currentSession?.status === 'PENDING' ? (
@@ -1118,6 +835,21 @@ export default function ContentGeneration() {
                             </button>
                             
                             <div className="h-4 w-px bg-gray-200 mx-2"></div>
+
+                            <button
+                                onClick={() => {
+                                    setVideoMode('t2v');
+                                    // Try to use title or content summary as prompt
+                                    setVideoPrompt(`Create a cinematic video about: ${result.title}. High quality, aesthetic, xiaohongshu style.`);
+                                    setActiveTab('video');
+                                    toast.success('已切换至视频生成，请完善提示词');
+                                }}
+                                className="text-xs flex items-center text-pink-600 hover:text-pink-800 font-medium mr-2"
+                                title="一键转为视频"
+                            >
+                                <Video size={14} className="mr-1" />
+                                转视频
+                            </button>
                             
                             <button 
                                 onClick={handleGenerate} 
@@ -1144,6 +876,8 @@ export default function ContentGeneration() {
                             cardGeneratorRef={cardGeneratorRef}
                             handleSelectBgForCard={handleSelectBgForCard}
                             onUpdateImagePrompt={handleUpdateImagePrompt}
+                            activeAccount={activeAccount}
+                            remixStructure={remixStructure}
                         />
                     )}
 
@@ -1161,6 +895,16 @@ export default function ContentGeneration() {
                         </h3>
                         </div>
                     </div>
+
+                    {/* Compliance Report */}
+                    {result.risk_warnings && (
+                        <ComplianceReport 
+                            warnings={result.risk_warnings} 
+                            className="mb-6" 
+                            onAutoFix={handleAutoFixCompliance}
+                            isFixing={isFixingCompliance}
+                        />
+                    )}
 
                     {/* Content Options */}
                     <div>
@@ -1180,7 +924,7 @@ export default function ContentGeneration() {
                             ) : (
                                 <div className="flex space-x-2">
                                     <button 
-                                        onClick={handleSaveContentEdit}
+                                        onClick={() => handleSaveContentEdit(undefined)}
                                         className="text-green-600 hover:text-green-800 text-xs flex items-center font-bold"
                                     >
                                         <Save size={12} className="mr-1" /> 保存
@@ -1436,33 +1180,62 @@ export default function ContentGeneration() {
                 <div className="h-full min-h-[400px] flex flex-col items-center justify-center text-gray-400 p-8 border-2 border-dashed border-gray-200 rounded-lg bg-gray-50/50">
                     <Sparkles size={48} className="mb-4 text-gray-300" />
                     <p className="text-center text-gray-500">
-                    {loading ? 'AI 正在分析人设并生成文案...\n这通常需要 10-20 秒' : '选择左侧热点或输入选题\n生成的爆款笔记将显示在这里'}
+                    {loading 
+                        ? 'AI 正在分析人设并生成文案...\n这通常需要 10-20 秒' 
+                        : activeTab === 'note' 
+                            ? '选择左侧热点或输入选题\n生成的爆款笔记将显示在这里'
+                            : '参考左侧黄金法则\n输入主题生成视频脚本'}
                     </p>
                 </div>
                 )}
             </div>
             </div>
         ) : (
-            // Video Mode Layout
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-               {/* Left: Inputs */}
-               <div className="lg:col-span-1 space-y-6">
-                  <VideoGeneratorForm 
-                      videoMode={videoMode}
-                      setVideoMode={setVideoMode}
-                      videoPrompt={videoPrompt}
-                      setVideoPrompt={setVideoPrompt}
-                      videoImageUrl={videoImageUrl}
-                      setVideoImageUrl={setVideoImageUrl}
-                      videoLoading={videoLoading}
-                      videoError={videoError}
-                      onGenerateVideo={handleGenerateVideo}
-                  />
+            // Video Mode Layout - Unified with note/script tabs
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+               {/* Left: Tips Sidebar */}
+               <div className="lg:col-span-3 space-y-4">
+                  <div className="bg-gradient-to-br from-pink-50 to-purple-50 p-4 rounded-lg border border-pink-100">
+                    <h3 className="text-sm font-bold text-pink-800 flex items-center mb-3">
+                      <Film size={16} className="mr-2" />
+                      视频生成技巧
+                    </h3>
+                    <div className="space-y-2 text-xs text-pink-700">
+                      <p><strong>文生视频：</strong>详细描述场景、动作、光影效果</p>
+                      <p><strong>图生视频：</strong>上传参考图，描述如何让图片动起来</p>
+                      <p><strong>提示词优化：</strong>使用 AI 优化按钮转换为英文，效果更好</p>
+                    </div>
+                  </div>
                </div>
             
-               {/* Right: Result */}
-               <div className="lg:col-span-2 space-y-6">
-                   {currentVideoSession ? (
+               {/* Right: Main Content */}
+               <div className="lg:col-span-9 space-y-4">
+                  {/* Configuration Form */}
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-pink-50/50 to-purple-50/50">
+                      <h3 className="font-semibold text-gray-800 flex items-center">
+                        <Film size={18} className="mr-2 text-pink-600" />
+                        视频创作配置
+                      </h3>
+                    </div>
+                    <div className="p-6">
+                      <VideoGeneratorForm 
+                          videoMode={videoMode}
+                          setVideoMode={setVideoMode}
+                          videoPrompt={videoPrompt}
+                          setVideoPrompt={setVideoPrompt}
+                          videoImageUrl={videoImageUrl}
+                          setVideoImageUrl={setVideoImageUrl}
+                          videoLoading={videoLoading}
+                          videoError={videoError}
+                          onGenerateVideo={handleGenerateVideo}
+                          activeAccount={activeAccount}
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Result Section - Full width card */}
+                  {currentVideoSession ? (
                        <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
                           <div className="p-6 space-y-6">
                               {/* History Header */}
@@ -1571,6 +1344,18 @@ export default function ContentGeneration() {
                                       <Video size={14} className="mr-1"/> 视觉/分镜分析
                                   </h4>
                                   <div className="text-xs text-purple-800 max-h-32 overflow-y-auto whitespace-pre-wrap">
+                                      {remixStructure.visual_analysis}
+                                  </div>
+                              </div>
+                          )}
+
+                          {/* Image Analysis Display (For Note Mode) */}
+                          {remixStructure.note_type !== 'video' && remixStructure.visual_analysis && (
+                               <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mt-2">
+                                  <h4 className="text-sm font-bold text-blue-900 mb-1 flex items-center">
+                                      <ImageIcon size={14} className="mr-1"/> 配图视觉分析
+                                  </h4>
+                                  <div className="text-xs text-blue-800 max-h-32 overflow-y-auto whitespace-pre-wrap">
                                       {remixStructure.visual_analysis}
                                   </div>
                               </div>

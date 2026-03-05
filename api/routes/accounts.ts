@@ -3,6 +3,7 @@ import db from '../db.js';
 import { startCreatorLogin, startMainSiteLogin, getLoginState, openNoteInBrowser } from '../services/rpa/xiaohongshu.js';
 import { checkAllAccountsHealth as checkHealth } from '../services/rpa/auth.js';
 import { enqueueTask } from '../services/queue.js';
+import { EncryptionService } from '../services/core/EncryptionService.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -39,6 +40,7 @@ router.get('/', (req, res) => {
       is_active: Boolean(acc.is_active),
       last_used_at: acc.last_used_at,
       created_at: acc.created_at,
+      // Check if cookies exist (Decrypt not needed just for checking existence, but safe to check length)
       has_creator_cookie: !!(acc.creator_cookies || acc.cookies),
       has_main_cookie: !!acc.main_site_cookies,
       status: acc.status || 'UNKNOWN', // Expose status
@@ -177,7 +179,17 @@ router.delete('/:id', (req, res) => {
         // 3. Delete note_stats
         db.prepare('DELETE FROM note_stats WHERE account_id = ?').run(accountId);
 
-        // 4. Delete account
+        // 4. Delete comments related to this account
+        db.prepare('DELETE FROM comments WHERE account_id = ?').run(accountId);
+
+        // 5. Delete related tasks (Cleanup zombie tasks)
+        // Match "accountId": 123 or "accountId": "123" in payload
+        db.prepare(`
+            DELETE FROM tasks 
+            WHERE payload LIKE ? OR payload LIKE ?
+        `).run(`%"accountId":${accountId}%`, ` "%accountId":"${accountId}"%`);
+
+        // 6. Delete account
         db.prepare('DELETE FROM accounts WHERE id = ?').run(accountId);
     })();
 

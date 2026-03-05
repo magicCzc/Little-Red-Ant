@@ -1,21 +1,24 @@
 
+import { BrowserService } from './BrowserService.js';
 import db from '../../db.js';
-import { launchBrowser, createBrowserContext } from './utils.js';
+// import { launchBrowser, createBrowserContext } from './utils.js'; // Deprecated
 import { getCookies } from './auth.js';
 import { RPAUtils } from './utils/RPAUtils.js';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { Logger } from '../LoggerService.js';
 import { Page } from 'playwright';
 import { Selectors } from './config/selectors.js';
+import { config } from '../../config.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const SCREENSHOT_DIR = path.join(__dirname, '../../../../public/screenshots');
+const SCREENSHOT_DIR = path.join(config.paths.public, 'screenshots');
 
 if (!fs.existsSync(SCREENSHOT_DIR)) {
-    fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
+    try {
+        fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
+    } catch (e) {
+        console.error('[Stats] Failed to create screenshot directory:', e);
+    }
 }
 
 async function takeProgressScreenshot(page: Page, taskId: string) {
@@ -29,16 +32,14 @@ async function takeProgressScreenshot(page: Page, taskId: string) {
 }
 
 export async function scrapeNoteStats(taskId?: string) {
-    const storageState = getCookies('CREATOR');
-    if (!storageState) throw new Error('Please bind "Creation Permission" first');
-    
-    // Use headed mode for better stability and visibility
-    const browser = await launchBrowser(false); 
-    let page: any;
+    // 1. Replace dedicated browser launch with Shared Session
+    const session = await BrowserService.getInstance().getAuthenticatedPage('CREATOR', true); // Headless = true
+    const { page } = session;
     
     try {
-        const context = await createBrowserContext(browser, storageState);
-        page = await context.newPage();
+        // Remove manual context creation as BrowserService handles it
+        // const context = await createBrowserContext(browser, storageState);
+        // page = await context.newPage();
         
         await takeProgressScreenshot(page, taskId!);
         const capturedNotes: any[] = [];
@@ -375,7 +376,7 @@ export async function scrapeNoteStats(taskId?: string) {
         } catch (e) {}
 
         if (!userId) {
-            const cookies = await context.cookies();
+            const cookies = await page.context().cookies();
             const useridCookie = cookies.find((c: any) => c.name === 'userid');
             if (useridCookie) userId = useridCookie.value;
         }
@@ -500,6 +501,8 @@ export async function scrapeNoteStats(taskId?: string) {
         }
         throw e;
     } finally {
-        if (browser) await browser.close();
+        if (page) {
+            try { await page.close(); } catch(e) {}
+        }
     }
 }

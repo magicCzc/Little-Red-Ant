@@ -8,6 +8,32 @@ cd Little-Red-Ant
 npm install
 ```
 
+## 0. Git Workflow & Branching Strategy
+
+We follow a strict branching strategy to ensure code stability.
+
+### Branches
+*   🔴 **`main`**: **Production Branch**. Stable, deployable code only. Read-only for direct pushes. Accepts merges ONLY via Pull Requests (PR).
+*   🟢 **`MagicZC`**: **Development Branch**. Active development happens here.
+
+### Daily Workflow
+1.  **Checkout Development Branch**:
+    ```bash
+    git checkout MagicZC
+    ```
+2.  **Develop & Commit**:
+    ```bash
+    git add .
+    git commit -m "feat: description of changes"
+    git push origin MagicZC
+    ```
+3.  **Merge to Main**:
+    *   Open GitHub Repository.
+    *   Create a **Pull Request (PR)** from `MagicZC` to `main`.
+    *   Review and Merge.
+
+---
+
 ## 1. Adding New Background Tasks
 
 The system uses a **Task Registry** pattern. Do NOT add logic directly to `worker.ts`.
@@ -101,4 +127,3 @@ The system uses a **Task Registry** pattern. Do NOT add logic directly to `worke
     ```tsx
     <img src={`/api/assets/proxy?url=${encodeURIComponent(externalUrl)}`} />
     ```
-

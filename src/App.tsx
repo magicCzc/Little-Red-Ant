@@ -27,6 +27,7 @@ import VideoStudio from '@/pages/VideoStudio';
 import VideoProjectList from '@/pages/VideoProjectList';
 import AssetsLibrary from '@/pages/AssetsLibrary';
 import NoteManagement from '@/pages/NoteManagement';
+import PromptOptimizer from '@/pages/PromptOptimizer';
 
 // Protected Route Wrapper with Layout
 const RequireAuth = ({ children, requiredPermission }: { children: JSX.Element, requiredPermission?: string }) => {
@@ -80,6 +81,7 @@ function App() {
             <Route path="/analytics" element={<RequireAuth><Analytics /></RequireAuth>} />
             <Route path="/notes" element={<RequireAuth><NoteManagement /></RequireAuth>} />
             <Route path="/knowledge" element={<RequireAuth><ViralKnowledgePage /></RequireAuth>} />
+            <Route path="/prompt-optimizer" element={<RequireAuth><PromptOptimizer /></RequireAuth>} />
             <Route path="/gallery" element={<RequireAuth><TrendingGalleryPage /></RequireAuth>} />
 
             <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />

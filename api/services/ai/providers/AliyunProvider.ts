@@ -5,6 +5,8 @@ import OSS from 'ali-oss';
 import { AIProvider } from '../interfaces/AIProvider.js';
 import { AudioProvider } from '../interfaces/AudioProvider.js';
 import { SettingsService } from '../../SettingsService.js';
+import config from '../../../config.js';
+import { Logger } from '../../LoggerService.js';
 
 export class AliyunProvider implements AIProvider, AudioProvider {
     // Endpoints
@@ -23,13 +25,13 @@ export class AliyunProvider implements AIProvider, AudioProvider {
     private async getOssClient() {
         if (this.ossClient) return this.ossClient;
 
-        const region = process.env.ALIYUN_OSS_REGION || 'oss-cn-hangzhou';
-        const bucket = process.env.ALIYUN_OSS_BUCKET;
-        const accessKeyId = process.env.ALIYUN_ACCESS_KEY_ID;
-        const accessKeySecret = process.env.ALIYUN_ACCESS_KEY_SECRET;
+        const region = config.ai.aliyun.ossRegion || 'oss-cn-hangzhou';
+        const bucket = config.ai.aliyun.ossBucket;
+        const accessKeyId = config.ai.aliyun.accessKeyId;
+        const accessKeySecret = config.ai.aliyun.accessKeySecret;
 
         if (!bucket || !accessKeyId || !accessKeySecret) {
-            throw new Error('OSS configuration missing (Bucket/AccessKey). Please check .env');
+            throw new Error('OSS configuration missing (Bucket/AccessKey). Please check config/env');
         }
 
         this.ossClient = new OSS({
@@ -50,12 +52,12 @@ export class AliyunProvider implements AIProvider, AudioProvider {
         const dbKey = await SettingsService.get('aliyun_api_key');
         if (dbKey) bearerToken = dbKey;
 
-        // 2. Fallback to Env
+        // 2. Fallback to Config
         if (!bearerToken) {
-             if (process.env.DASHSCOPE_API_KEY) {
-                bearerToken = process.env.DASHSCOPE_API_KEY;
-            } else if (process.env.ALIYUN_ACCESS_KEY_ID?.startsWith('sk-')) {
-                 bearerToken = process.env.ALIYUN_ACCESS_KEY_ID;
+             if (config.ai.aliyun.dashscopeApiKey) {
+                bearerToken = config.ai.aliyun.dashscopeApiKey;
+            } else if (config.ai.aliyun.accessKeyId?.startsWith('sk-')) {
+                 bearerToken = config.ai.aliyun.accessKeyId;
             }
         }
         
@@ -101,7 +103,7 @@ export class AliyunProvider implements AIProvider, AudioProvider {
         const headers = await this.getHeaders(false); // Sync call for text
 
         try {
-            console.log(`[AliyunProvider] Generating text with ${model}...`);
+            Logger.info('AliyunProvider', `Generating text with ${model}...`);
             const res = await axios.post(this.textGenerationUrl, payload, { headers });
             
             if (res.data.output?.choices?.[0]?.message?.content) {
@@ -112,7 +114,7 @@ export class AliyunProvider implements AIProvider, AudioProvider {
             
             throw new Error('No content in Aliyun response');
         } catch (error: any) {
-            console.error('Aliyun Text API Error:', error.response?.data || error.message);
+            Logger.error('AliyunProvider', 'Text API Error', error.response?.data || error.message);
             throw new Error(error.response?.data?.message || error.message);
         }
     }
@@ -134,7 +136,7 @@ export class AliyunProvider implements AIProvider, AudioProvider {
         };
 
         try {
-            console.log(`[AliyunProvider] Generating multimodal text with model ${model}...`);
+            Logger.info('AliyunProvider', `Generating multimodal text with model ${model}...`);
             const res = await axios.post(this.multimodalUrl, payload, { headers });
             
             if (res.data.output?.choices?.[0]?.message?.content) {
@@ -148,7 +150,7 @@ export class AliyunProvider implements AIProvider, AudioProvider {
             }
             throw new Error('No content in Aliyun VL response');
         } catch (error: any) {
-            console.error('Aliyun VL API Error:', error.response?.data || error.message);
+            Logger.error('AliyunProvider', 'VL API Error', error.response?.data || error.message);
             throw new Error(error.response?.data?.message || error.message);
         }
     }
@@ -173,7 +175,7 @@ export class AliyunProvider implements AIProvider, AudioProvider {
         try {
             return JSON.parse(clean) as T;
         } catch (e) {
-            console.error('JSON Parse Error:', clean);
+            Logger.error('AliyunProvider', 'JSON Parse Error', clean);
             throw new Error('Failed to parse AI response as JSON');
         }
     }
@@ -204,7 +206,7 @@ export class AliyunProvider implements AIProvider, AudioProvider {
         }
 
         try {
-            console.log(`[AliyunProvider] Submitting video task (${model})...`);
+            Logger.info('AliyunProvider', `Submitting video task (${model})...`);
             // 1. Submit Task
             const submitRes = await axios.post(this.videoGenerationUrl, payload, { headers });
             
@@ -213,7 +215,7 @@ export class AliyunProvider implements AIProvider, AudioProvider {
             }
             
             const taskId = submitRes.data.output.task_id;
-            console.log(`[AliyunProvider] Video task submitted: ${taskId}`);
+            Logger.info('AliyunProvider', `Video task submitted: ${taskId}`);
 
             // 2. Poll for Result
             // Remove Async Header for polling
@@ -238,13 +240,13 @@ export class AliyunProvider implements AIProvider, AudioProvider {
                     throw new Error(`Aliyun video task failed: ${pollRes.data.output?.message || 'Unknown error'}`);
                 }
                 
-                console.log(`[AliyunProvider] Polling video task ${taskId}: ${taskStatus} (${attempts}/${maxAttempts})`);
+                Logger.debug('AliyunProvider', `Polling video task ${taskId}: ${taskStatus} (${attempts}/${maxAttempts})`);
             }
             
             throw new Error('Video generation timed out');
 
         } catch (error: any) {
-             console.error('Aliyun Video API Error:', error.response?.data || error.message);
+             Logger.error('AliyunProvider', 'Video API Error', error.response?.data || error.message);
              throw new Error(error.response?.data?.message || error.message);
         }
     }
@@ -265,7 +267,33 @@ export class AliyunProvider implements AIProvider, AudioProvider {
         let payload: any;
         let apiUrl = this.multimodalUrl;
 
-        if (model.includes('wanx')) {
+        // Support Reference Image (Image-to-Image)
+        // If ref_img is provided, we must use a model that supports it (e.g. wanx-v1 with ref_img, or wanx-style-repaint)
+        // Currently Aliyun Wanx V1 supports `ref_img` parameter for Style Repaint or similar tasks.
+        // Or "wanx-background-generation" etc.
+        // For standard "wanx-v1" text-to-image, it might not support ref_img directly in the same payload structure.
+        // Let's assume we use 'wanx-v1' and check if we need to switch model or payload.
+        
+        // Wanx V1 documentation: https://help.aliyun.com/zh/dashscope/developer-reference/api-details-9
+        // Input can have 'ref_img' for "style_ref" or similar.
+        
+        if (options.ref_img && model.includes('wanx')) {
+             Logger.info('AliyunProvider', `Using Reference Image: ${options.ref_img}`);
+             apiUrl = this.textToImageId;
+             payload = {
+                model: model,
+                input: { 
+                    prompt: prompt,
+                    ref_img: options.ref_img 
+                },
+                parameters: {
+                    style: "<auto>",
+                    size: "1024*1024",
+                    n: 1,
+                    // ref_strength: 0.5 // Optional, default 0.5
+                }
+            };
+        } else if (model.includes('wanx')) {
             apiUrl = this.textToImageId; // Wanx uses Text-to-Image endpoint
             payload = {
                 model: model,
@@ -278,6 +306,8 @@ export class AliyunProvider implements AIProvider, AudioProvider {
             };
         } else {
             // Qwen or other multimodal models
+            // Qwen-VL normally is for understanding, Qwen-Image-Plus is for generation.
+            // Qwen-Image-Plus doesn't support ref_img in the same way as Wanx.
             payload = {
                 model: model,
                 input: {
@@ -288,11 +318,11 @@ export class AliyunProvider implements AIProvider, AudioProvider {
         }
 
         try {
-            console.log(`[AliyunProvider] Generating image with model ${model} at ${apiUrl}...`);
+            Logger.info('AliyunProvider', `Generating image with model ${model} at ${apiUrl}...`);
             if (model.includes('wanx')) {
-                console.log(`[AliyunProvider] Final Prompt: ${payload.input.prompt}`);
+                Logger.debug('AliyunProvider', `Final Prompt: ${payload.input.prompt}`);
             } else {
-                 console.log(`[AliyunProvider] Final Prompt: ${payload.input.messages[0].content[0].text}`);
+                Logger.debug('AliyunProvider', `Final Prompt: ${payload.input.messages[0].content[0].text}`);
             }
             
             const res = await axios.post(apiUrl, payload, { headers });
@@ -315,7 +345,7 @@ export class AliyunProvider implements AIProvider, AudioProvider {
             
             throw new Error('No image URL found in Aliyun response');
         } catch (error: any) {
-            console.error('Aliyun API Error:', error.response?.data || error.message);
+            Logger.error('AliyunProvider', 'Image API Error', error.response?.data || error.message);
             throw new Error(error.response?.data?.message || error.message);
         }
     }
@@ -337,7 +367,7 @@ export class AliyunProvider implements AIProvider, AudioProvider {
             let url = client.signatureUrl(objectName, { expires: 3600 });
             return url.replace('http://', 'https://');
         } catch (e: any) {
-             console.warn('OSS Upload failed, trying DashScope upload...', e.message);
+             Logger.warn('AliyunProvider', 'OSS Upload failed, trying DashScope upload...', e.message);
              // DashScope Upload fallback for Qwen-VL (uses DashScope File API)
              // https://help.aliyun.com/zh/dashscope/developer-reference/upload-file
              try {
@@ -373,7 +403,7 @@ export class AliyunProvider implements AIProvider, AudioProvider {
 
         try {
             // 1. Upload to OSS (Preferred for Paraformer)
-            console.log(`[AliyunProvider] Uploading file ${audioPath} to OSS...`);
+            Logger.info('AliyunProvider', `Uploading file ${audioPath} to OSS...`);
             const client = await this.getOssClient();
             
             // Generate a unique object name
@@ -389,10 +419,10 @@ export class AliyunProvider implements AIProvider, AudioProvider {
             // Ensure https
             audioUrl = audioUrl.replace('http://', 'https://');
             
-            console.log(`[AliyunProvider] OSS Upload success (Signed URL): ${audioUrl}`);
+            Logger.info('AliyunProvider', `OSS Upload success (Signed URL): ${audioUrl}`);
 
         } catch (ossError: any) {
-            console.warn('[AliyunProvider] OSS Upload failed, falling back to DashScope Upload:', ossError.message);
+            Logger.warn('AliyunProvider', 'OSS Upload failed, falling back to DashScope Upload:', ossError.message);
             // If OSS fails (e.g. not configured), throw error since we committed to OSS strategy
             throw new Error(`OSS Upload Failed: ${ossError.message}. Please configure ALIYUN_OSS_* env vars.`);
         }
@@ -414,20 +444,20 @@ export class AliyunProvider implements AIProvider, AudioProvider {
                  }
              };
 
-             console.log(`[AliyunProvider] Submitting ASR task (${payload.model})...`);
+             Logger.info('AliyunProvider', `Submitting ASR task (${payload.model})...`);
              const asrRes = await axios.post(this.asrUrl, payload, { headers: asrHeaders });
              
              if (!asrRes.data.output?.task_id) {
                  throw new Error(`Aliyun ASR Task Failed: ${JSON.stringify(asrRes.data)}`);
              }
              const taskId = asrRes.data.output.task_id;
-             console.log(`[AliyunProvider] ASR Task submitted: ${taskId}`);
+             Logger.info('AliyunProvider', `ASR Task submitted: ${taskId}`);
 
              // 3. Poll
              return await this.pollAsrTask(taskId, asrHeaders);
 
         } catch (error: any) {
-             console.error('Aliyun ASR Error:', error.response?.data || error.message);
+             Logger.error('AliyunProvider', 'ASR Error', error.response?.data || error.message);
              throw new Error(error.response?.data?.message || error.message);
         }
     }
@@ -462,7 +492,7 @@ export class AliyunProvider implements AIProvider, AudioProvider {
                  throw new Error(`ASR Task Failed: ${res.data.output?.message}`);
             }
             
-            if (attempts % 5 === 0) console.log(`[AliyunProvider] Polling ASR ${taskId}: ${status}`);
+            if (attempts % 5 === 0) Logger.debug('AliyunProvider', `Polling ASR ${taskId}: ${status}`);
         }
         throw new Error('ASR Task Timeout');
     }
