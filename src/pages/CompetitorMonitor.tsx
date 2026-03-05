@@ -11,6 +11,15 @@ import PageHeader from '../components/PageHeader';
 import PageLoading from '../components/PageLoading';
 import EmptyState from '../components/EmptyState';
 import { Skeleton } from '../components/ui/Skeleton';
+import FriendlyError, { FriendlyErrorBadge } from '../components/FriendlyError';
+
+interface FriendlyErrorData {
+    code?: string;
+    title: string;
+    message: string;
+    suggestion: string;
+    severity: 'error' | 'warning' | 'info';
+}
 
 interface Competitor {
   id: number;
@@ -25,6 +34,7 @@ interface Competitor {
   last_error?: string;
   analysis_result?: any;
   latest_notes?: any[];
+  friendlyError?: FriendlyErrorData | null;
 }
 
 export default function CompetitorMonitor() {
@@ -399,9 +409,9 @@ export default function CompetitorMonitor() {
 
         {/* Competitors Grid */}
         {filteredCompetitors.length === 0 ? (
-            <EmptyState 
-                title="暂无对标账号" 
-                description="添加对标账号，系统将自动监控其更新并拆解爆款。"
+            <EmptyState
+                title="暂无对标账号"
+                description="添加对标账号，系统将自动监控其更新并拆解爆款策略。"
                 icon={Target}
                 action={
                     <Link
@@ -412,6 +422,12 @@ export default function CompetitorMonitor() {
                         添加第一个账号
                     </Link>
                 }
+                steps={[
+                    { text: '复制小红书博主主页链接' },
+                    { text: '粘贴链接并点击添加' },
+                    { text: '系统自动抓取数据并分析' }
+                ]}
+                tip="支持批量添加，一次最多可添加 10 个对标账号"
             />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -490,14 +506,16 @@ export default function CompetitorMonitor() {
                         </div>
                     </div>
                 ) : competitor.status === 'error' ? (
-                     <div className="mb-4 p-3 bg-red-50 rounded-lg border border-red-100 text-xs text-red-800">
-                        <div className="font-bold mb-1 flex items-center">
-                            <AlertCircle size={12} className="mr-1.5 text-red-600"/> 
-                            上次更新失败
-                        </div>
-                        <div className="line-clamp-2 opacity-80 leading-relaxed">
-                            {competitor.last_error || '未知错误，请重试'}
-                        </div>
+                    <div className="mb-4">
+                        <FriendlyError 
+                            error={competitor.friendlyError || {
+                                title: '更新失败',
+                                message: competitor.last_error || '未知错误',
+                                suggestion: '请稍后重试，或检查账号状态',
+                                severity: 'error'
+                            }}
+                            onRetry={() => handleRefresh(competitor.id, { stopPropagation: () => {} } as any)}
+                        />
                     </div>
                 ) : (
                     <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-100 text-xs text-gray-500 flex items-center justify-center h-[72px]">
