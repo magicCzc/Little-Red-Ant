@@ -91,7 +91,9 @@ export class FeedbackLoopService {
                 const style = meta.style || 'default';
                 if (!styleGroups[style]) styleGroups[style] = [];
                 styleGroups[style].push(note);
-            } catch (e) {}
+            } catch {
+                // Ignore parsing errors
+            }
         }
 
         // 2. Process each style

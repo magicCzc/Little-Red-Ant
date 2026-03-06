@@ -13,8 +13,8 @@ router.get('/', (req, res) => {
         const limit = Number(pageSize);
         const offset = (Number(page) - 1) * limit;
 
-        let whereClauses: string[] = [];
-        let params: any[] = [];
+        const whereClauses: string[] = [];
+        const params: (string | number)[] = [];
 
         // 1. Filter by Status
         if (status && status !== 'ALL') {

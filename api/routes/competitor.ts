@@ -80,7 +80,8 @@ router.get('/:id', (req, res) => {
 
 // Add/Analyze (Async)
 router.post('/analyze', async (req, res) => {
-    let { url } = req.body;
+    const { url: urlFromBody } = req.body;
+    let url = urlFromBody;
     if (!url) return res.status(400).json({ error: 'URL or User ID required' });
 
     try {
